@@ -8,6 +8,29 @@ using namespace std;
 #define BOARD_HEIGHT (int)26
 #define DELAY 1000
 
+struct Obsticle {
+    enum ObsticleType {
+        CAR
+    };
+
+    int x;
+    int y;
+    int speed;
+    char skin;
+    ObsticleType type;
+
+    void initObsticle(int x, int y, int speed, ObsticleType type) {
+        this->x = x;
+        this->y = y;
+        this->speed = speed;
+        this->type = type;
+
+        if (x < 0 || x > BOARD_WIDTH || y < 0 || y > BOARD_HEIGHT) {
+            throw runtime_error("Blad podczas inicjalizacji, obiekt obsticle poza oknem!");
+        }
+    }
+};
+
 struct Frog {
     char skin = 'O';
     int x;
@@ -40,6 +63,13 @@ struct Frog {
 struct Game {
     int level;
     Frog frog;
+    int obsticeCount = 0;
+    Obsticle obsticle[10];  //TODO: dynamiczna alokacja miejsca
+
+    void addObsticle(Obsticle obsticle) {
+        this->obsticle[obsticeCount] = obsticle;
+        obsticeCount++;
+    }
 };
 
 void initGame(Game *game) {
@@ -49,13 +79,23 @@ void initGame(Game *game) {
 }
 
 void draw(WINDOW *win, Game game) {
-
     wclear(win);
+
+    // Box and board setup
     box(win, 0, 0);
     mvwprintw(win, 0, (BOARD_WIDTH-sizeof(PROJECT_NAME)/sizeof(char))/2 , PROJECT_NAME);
     mvwprintw(win, BOARD_HEIGHT+1, 4*BOARD_WIDTH/5, " Level: %d ", game.level);
 
+
+    // Player
     mvwprintw(win, game.frog.y, game.frog.x, "%c",game.frog.getFrog());
+
+    // Obsticles
+    for (int i = 0; i < game.obsticeCount; i++) {
+        Obsticle obsticle = game.obsticle[i];
+        mvwprintw(win, obsticle.x, obsticle.y, "X");
+    }
+
 
     wrefresh(win);
     usleep(DELAY);
@@ -70,6 +110,15 @@ void cursesInit() {
     curs_set(FALSE);
     clear();
     refresh();
+}
+
+void levelInit(Game *game) {
+    Obsticle test;
+    test.initObsticle(15, 10, 2, Obsticle::CAR);
+
+    game->addObsticle(test);
+    test.initObsticle(5, 20, 2, Obsticle::CAR);
+    game->addObsticle(test);
 }
 
 
@@ -90,6 +139,8 @@ int main(int argc, char *argv[]) {
     WINDOW *win = newwin(BOARD_HEIGHT+2, BOARD_WIDTH+2, (terminal.height-BOARD_HEIGHT-2)/2, (terminal.width-BOARD_WIDTH-2)/2);
     draw(win, game);
 
+    levelInit(&game);
+    draw(win, game);
 
     int input_b;
     while (1) {
