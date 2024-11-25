@@ -1,4 +1,5 @@
 #include <iostream>
+#include<time.h>
 #include <ncurses.h>			/* ncurses.h includes stdio.h */
 #include <unistd.h>
 using namespace std;
@@ -8,37 +9,40 @@ using namespace std;
 #define BOARD_HEIGHT (int)26
 #define DELAY 1000
 
+int getRandomNumber(int min, int max, unsigned int user_seed) {
+    // Taking current time as seed
+    unsigned int seed = time(0) * user_seed;
+    return  rand_r(&seed) % (max - min + 1) + min;
+
+}
+
 struct Obsticle {
     enum ObsticleType {
         CAR
     };
 
-    int x;
     int y;
+    int x;
     int speed;
-    char skin;
+    char skin = 'X';
     ObsticleType type;
 
     void initObsticle(int x, int y, int speed, ObsticleType type) {
-        this->x = x;
         this->y = y;
+        this->x = x;
         this->speed = speed;
         this->type = type;
 
-        if (x < 0 || x > BOARD_WIDTH || y < 0 || y > BOARD_HEIGHT) {
+        if (y < 0 || y > BOARD_HEIGHT || x < 0 || x > BOARD_WIDTH) {
             throw runtime_error("Blad podczas inicjalizacji, obiekt obsticle poza oknem!");
         }
     }
 };
 
 struct Frog {
-    char skin = 'O';
+    const char skin = 'O';
     int x;
     int y;
-
-    char getFrog() {
-        return skin;
-    }
 
     void moveUp(){
         if (y > 1)
@@ -61,6 +65,7 @@ struct Frog {
 };
 
 struct Game {
+    int end = 0;
     int level;
     Frog frog;
     int obsticeCount = 0;
@@ -86,17 +91,18 @@ void draw(WINDOW *win, Game game) {
     mvwprintw(win, 0, (BOARD_WIDTH-sizeof(PROJECT_NAME)/sizeof(char))/2 , PROJECT_NAME);
     mvwprintw(win, BOARD_HEIGHT+1, 4*BOARD_WIDTH/5, " Level: %d ", game.level);
 
+    if (game.end) {
+        mvwprintw(win, BOARD_HEIGHT/2, (BOARD_WIDTH - 9)/2, "Game Over");
+    }else {
+        // Player
+        mvwprintw(win, game.frog.y, game.frog.x-1, "%c",game.frog.skin);
 
-    // Player
-    mvwprintw(win, game.frog.y, game.frog.x, "%c",game.frog.getFrog());
-
-    // Obsticles
-    for (int i = 0; i < game.obsticeCount; i++) {
-        Obsticle obsticle = game.obsticle[i];
-        mvwprintw(win, obsticle.x, obsticle.y, "X");
+        // Obsticles
+        for (int i = 0; i < game.obsticeCount; i++) {
+            Obsticle obsticle = game.obsticle[i];
+            mvwprintw(win, obsticle.y, obsticle.x, "%c", obsticle.skin);
+        }
     }
-
-
     wrefresh(win);
     usleep(DELAY);
 };
@@ -104,7 +110,6 @@ void draw(WINDOW *win, Game game) {
 void cursesInit() {
     initscr();
     noecho();
-    keypad(stdscr, TRUE);
     cbreak();
     timeout(DELAY);
     curs_set(FALSE);
@@ -114,11 +119,28 @@ void cursesInit() {
 
 void levelInit(Game *game) {
     Obsticle test;
-    test.initObsticle(15, 10, 2, Obsticle::CAR);
+    for (int i = 0; i < 10; i++) {
+        test.initObsticle(getRandomNumber(1, BOARD_WIDTH, i), getRandomNumber(1,BOARD_HEIGHT, i), 2, Obsticle::CAR);
+        game->addObsticle(test);
+    }
+}
 
-    game->addObsticle(test);
-    test.initObsticle(5, 20, 2, Obsticle::CAR);
-    game->addObsticle(test);
+
+/** @brief Function checks if frog colides with obsticle
+ *
+ *
+ *  @return true if frog colides with obsticle
+ */
+bool checkColison(Game game) {
+
+    for (int i = 0; i < game.obsticeCount; i++) {
+        Obsticle obsticle = game.obsticle[i];
+        if (obsticle.y == game.frog.y && obsticle.x+1 == game.frog.x) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 
@@ -131,19 +153,20 @@ int main(int argc, char *argv[]) {
     };
 
     Terminal terminal;
-    Game game;
-
-    initGame(&game);
-
     getmaxyx(stdscr, terminal.height, terminal.width);
     WINDOW *win = newwin(BOARD_HEIGHT+2, BOARD_WIDTH+2, (terminal.height-BOARD_HEIGHT-2)/2, (terminal.width-BOARD_WIDTH-2)/2);
+    keypad(win, TRUE);
+
+    Game game;
+    initGame(&game);
     draw(win, game);
 
     levelInit(&game);
     draw(win, game);
 
     int input_b;
-    while (1) {
+
+    while (!game.end) {
         input_b = wgetch(win);
 
         if (input_b == 'w' || input_b == KEY_UP) {
@@ -154,12 +177,19 @@ int main(int argc, char *argv[]) {
             game.frog.moveLeft();
         }else if (input_b == 'd' || input_b == KEY_RIGHT) {
             game.frog.moveRight();
+        } else if (input_b == 'q' || input_b == KEY_EXIT || input_b == 27) {
+            game.end = 1;
         }
 
+        if (checkColison(game)) {
+            game.end = 1;
+        }
 
         draw(win, game);
     }
 
+
+    wgetch(win);
     endwin();
     return 0;
 }
