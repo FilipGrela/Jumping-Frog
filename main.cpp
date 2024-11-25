@@ -16,8 +16,8 @@ int getRandomNumber(int min, int max, unsigned int user_seed) {
 
 }
 
-struct Obsticle {
-    enum ObsticleType {
+struct Obstacle {
+    enum ObstacleType {
         CAR
     };
 
@@ -25,16 +25,16 @@ struct Obsticle {
     int x;
     int speed;
     char skin = 'X';
-    ObsticleType type;
+    ObstacleType type;
 
-    void initObsticle(int x, int y, int speed, ObsticleType type) {
+    void initObstacle(int x, int y, int speed, ObstacleType type) {
         this->y = y;
         this->x = x;
         this->speed = speed;
         this->type = type;
 
         if (y < 0 || y > BOARD_HEIGHT || x < 0 || x > BOARD_WIDTH) {
-            throw runtime_error("Blad podczas inicjalizacji, obiekt obsticle poza oknem!");
+            throw runtime_error("Blad podczas inicjalizacji, obiekt obstacle poza oknem!");
         }
     }
 };
@@ -68,12 +68,12 @@ struct Game {
     int end = 0;
     int level;
     Frog frog;
-    int obsticeCount = 0;
-    Obsticle obsticle[10];  //TODO: dynamiczna alokacja miejsca
+    int obstacleCount = 0;
+    Obstacle obstacle[10];  //TODO: dynamiczna alokacja miejsca
 
-    void addObsticle(Obsticle obsticle) {
-        this->obsticle[obsticeCount] = obsticle;
-        obsticeCount++;
+    void addObstacle(Obstacle obstacle) {
+        this->obstacle[obstacleCount] = obstacle;
+        obstacleCount++;
     }
 };
 
@@ -97,10 +97,10 @@ void draw(WINDOW *win, Game game) {
         // Player
         mvwprintw(win, game.frog.y, game.frog.x-1, "%c",game.frog.skin);
 
-        // Obsticles
-        for (int i = 0; i < game.obsticeCount; i++) {
-            Obsticle obsticle = game.obsticle[i];
-            mvwprintw(win, obsticle.y, obsticle.x, "%c", obsticle.skin);
+        // Obstacle
+        for (int i = 0; i < game.obstacleCount; i++) {
+            Obstacle obstacle = game.obstacle[i];
+            mvwprintw(win, obstacle.y, obstacle.x, "%c", obstacle.skin);
         }
     }
     wrefresh(win);
@@ -118,24 +118,24 @@ void cursesInit() {
 }
 
 void levelInit(Game *game) {
-    Obsticle test;
+    Obstacle test;
     for (int i = 0; i < 10; i++) {
-        test.initObsticle(getRandomNumber(1, BOARD_WIDTH, i), getRandomNumber(1,BOARD_HEIGHT, i), 2, Obsticle::CAR);
-        game->addObsticle(test);
+        test.initObstacle(getRandomNumber(1, BOARD_WIDTH, i), getRandomNumber(1,BOARD_HEIGHT, i), 2, Obstacle::CAR);
+        game->addObstacle(test);
     }
 }
 
 
-/** @brief Function checks if frog colides with obsticle
+/** @brief Function checks if frog collides with obstacle
  *
  *
- *  @return true if frog colides with obsticle
+ *  @return true if frog collides with obstacle
  */
-bool checkColison(Game game) {
+bool checkCollision(Game game) {
 
-    for (int i = 0; i < game.obsticeCount; i++) {
-        Obsticle obsticle = game.obsticle[i];
-        if (obsticle.y == game.frog.y && obsticle.x+1 == game.frog.x) {
+    for (int i = 0; i < game.obstacleCount; i++) {
+        Obstacle obstacle = game.obstacle[i];
+        if (obstacle.y == game.frog.y && obstacle.x+1 == game.frog.x) {
             return true;
         }
     }
@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
             game.end = 1;
         }
 
-        if (checkColison(game)) {
+        if (checkCollision(game)) {
             game.end = 1;
         }
 
