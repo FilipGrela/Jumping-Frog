@@ -44,6 +44,7 @@ struct Game {
     int end = 0;
     bool win = false;
     int level;
+    int start_time;
     Exit exit;
     Frog frog;
     int obstacleCount = 0;
@@ -54,12 +55,17 @@ void addObstacle(Game *game, Obstacle obstacle) {
     game->obstacle[game->obstacleCount] = obstacle;
     game->obstacleCount++;
 }
-
 void initGame(Game *game) {
     game->level = 1;
     game->frog.x = BOARD_WIDTH/2;
     game->frog.y = BOARD_HEIGHT;
 }
+
+int getElapsedTime(int *ts) {
+    // clock_t end = clock();
+    int end = time(NULL);
+    return (end - *ts);
+};
 
 void draw(WINDOW *win, Game game) {
     wclear(win);
@@ -68,6 +74,7 @@ void draw(WINDOW *win, Game game) {
     box(win, 0, 0);
     mvwprintw(win, 0, (BOARD_WIDTH-sizeof(PROJECT_NAME)/sizeof(char))/2 , PROJECT_NAME);
     mvwprintw(win, BOARD_HEIGHT+1, 4*BOARD_WIDTH/5, " Level: %d ", game.level);
+    mvwprintw(win, 0, 7*BOARD_WIDTH/10, "Time: %d", getElapsedTime(&game.start_time));
 
     if (game.end) {
         if (game.win) {
@@ -209,6 +216,7 @@ int main(int argc, char *argv[]) {
     keypad(stdscr, TRUE);
 
     Game game;
+    game.start_time = time(NULL);
     initGame(&game);
     draw(win, game);
 
