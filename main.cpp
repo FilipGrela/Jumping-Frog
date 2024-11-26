@@ -2,12 +2,12 @@
 #include<time.h>
 #include <ncurses.h>			/* ncurses.h includes stdio.h */
 #include <unistd.h>
-using namespace std;
+// using namespace std;
 
 #define PROJECT_NAME "Jumping Frog"
-#define BOARD_WIDTH (int)100
-#define BOARD_HEIGHT (int)26
-#define DELAY 100
+#define BOARD_WIDTH (int)60
+#define BOARD_HEIGHT (int)30
+#define DELAY 30000
 
 int getRandomNumber(int min, int max) {
     return rand() % (max + 1 - min) + min;
@@ -22,23 +22,32 @@ struct Obstacle {
 
     int y;
     int x;
-    int speed;
+    unsigned int speed;
+    int direction = 1;
     char skin = 'X';
     ObstacleType type;
 };
 
+struct Exit {
+    int x;
+    int y;
+    char skin = 'W';
+};
+
 struct Frog {
-    const char skin = 'O';
+    const char skin = '|';
     int x;
     int y;
 };
 
 struct Game {
     int end = 0;
+    bool win = false;
     int level;
+    Exit exit;
     Frog frog;
     int obstacleCount = 0;
-    Obstacle obstacle[10];  //TODO: dynamiczna alokacja miejsca
+    Obstacle obstacle[50];  //TODO: dynamiczna alokacja miejsca
 };
 
 void addObstacle(Game *game, Obstacle obstacle) {
@@ -61,15 +70,31 @@ void draw(WINDOW *win, Game game) {
     mvwprintw(win, BOARD_HEIGHT+1, 4*BOARD_WIDTH/5, " Level: %d ", game.level);
 
     if (game.end) {
-        mvwprintw(win, BOARD_HEIGHT/2, (BOARD_WIDTH - 9)/2, "Game Over");
+        if (game.win) {
+            wattron(win, COLOR_PAIR(2));
+            mvwprintw(win, BOARD_HEIGHT/2, (BOARD_WIDTH - 7)/2, "You won!");
+            wattroff(win, COLOR_PAIR(2));
+        }else {
+            wattron(win, COLOR_PAIR(2));
+            mvwprintw(win, BOARD_HEIGHT/2, (BOARD_WIDTH - 9)/2, "Game Over");
+            wattroff(win, COLOR_PAIR(2));
+        }
     }else {
         // Player
-        mvwprintw(win, game.frog.y, game.frog.x-1, "%c",game.frog.skin);
 
+        wattron(win, COLOR_PAIR(2));
+        mvwprintw(win, game.exit.y, game.exit.x-1, "%c", game.exit.skin);
+        wattroff(win, COLOR_PAIR(1));
+
+        wattron(win, COLOR_PAIR(1));
+        mvwprintw(win, game.frog.y, game.frog.x-1, "%c",game.frog.skin);
+        wattroff(win, COLOR_PAIR(1));
         // Obstacle
         for (int i = 0; i < game.obstacleCount; i++) {
             Obstacle obstacle = game.obstacle[i];
+            wattron(win, COLOR_PAIR(3));
             mvwprintw(win, obstacle.y, obstacle.x, "%c", obstacle.skin);
+            wattroff(win, COLOR_PAIR(3));
         }
     }
     wrefresh(win);
@@ -80,18 +105,27 @@ void cursesInit() {
     initscr();
     noecho();
     cbreak();
-    timeout(DELAY);
+    timeout(FALSE);
     curs_set(FALSE);
+    start_color();
     clear();
     refresh();
+
+    init_pair(1, COLOR_GREEN, COLOR_BLACK);
+    init_pair(2, COLOR_WHITE, COLOR_RED);
+    init_pair(3, COLOR_RED, COLOR_BLACK);
 }
 
 void levelInit(Game *game) {
+    Exit exit;
+    exit.x = BOARD_WIDTH/2;
+    exit.y = 1;
+    game->exit = exit;
 
     // stationary
     for (int i = 0; i < 5; i++) {
         Obstacle test;
-        test.x = getRandomNumber(1, BOARD_WIDTH);
+        test.x = getRandomNumber(2, BOARD_WIDTH-1);
         test.y = getRandomNumber(1,BOARD_HEIGHT-1);
         test.type = Obstacle::CACTUS;
         test.speed = 0;
@@ -100,11 +134,11 @@ void levelInit(Game *game) {
     }
 
     // Moving ones
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 15; i++) {
         Obstacle test;
-        test.x = getRandomNumber(1, BOARD_WIDTH);
-        test.y = getRandomNumber(1,BOARD_HEIGHT);
-        test.speed = 1;
+        test.x = getRandomNumber(2, BOARD_WIDTH-1);
+        test.y = getRandomNumber(1,BOARD_HEIGHT-1);
+        test.speed = getRandomNumber(1,3);
         test.skin = '*';
         test.type = Obstacle::CAR;
 
@@ -126,13 +160,21 @@ void levelInit(Game *game) {
  *
  *  @return true if frog collides with obstacle
  */
-bool checkCollision(Game game) {
+void checkCollision(Game *game) {
 
-    for (int i = 0; i < game.obstacleCount; i++) {
-        Obstacle obstacle = game.obstacle[i];
-        if (obstacle.y == game.frog.y && obstacle.x+1 == game.frog.x) {
-            return true;
+    for (int i = 0; i < game->obstacleCount; i++) {
+        Obstacle obstacle = game->obstacle[i];
+        if (obstacle.y == game->frog.y && obstacle.x+1 == game->frog.x) {
+            game->end = true;
         }
+    }
+}
+
+bool checkWin(Game *game) {
+    if (game->frog.x == game->exit.x && game->frog.y == game->exit.y) {
+        game->win = true;
+        game->level++;
+        return true;
     }
     return false;
 }
@@ -142,8 +184,11 @@ void moveObstacles(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
         Obstacle *obstacle = &(game->obstacle[i]);
         if (obstacle->type == Obstacle::CAR) {
-            if (obstacle->x <= 1 || obstacle->x >= BOARD_WIDTH) obstacle->speed *= -1;
-            obstacle->x += obstacle->speed;
+            for (int j = 0; j < obstacle->speed; j++) {
+                if (obstacle->x <= 1 || obstacle->x >= BOARD_WIDTH) obstacle->direction *=-1;
+                obstacle->x += 1*obstacle->direction;
+                checkCollision(game);
+            }
         }
     }
 }
@@ -176,14 +221,13 @@ int main(int argc, char *argv[]) {
         input_b = getch();
 
         if (input_b == 'w' || input_b == KEY_UP) {
-
             if (game.frog.y > 1)
                 game.frog.y--;
         } else if (input_b == 's' || input_b == KEY_DOWN) {
             if (game.frog.y < BOARD_HEIGHT)
                 game.frog.y++;
         } else if (input_b == 'a' || input_b == KEY_LEFT) {
-            if (game.frog.x > 1)
+            if (game.frog.x > 2)
                 game.frog.x--;
         }else if (input_b == 'd' || input_b == KEY_RIGHT) {
             if (game.frog.x < BOARD_WIDTH)
@@ -192,9 +236,12 @@ int main(int argc, char *argv[]) {
             game.end = 1;
         }
 
-        moveObstacles(&game);
 
-        if (checkCollision(game)) {
+        moveObstacles(&game);
+        checkWin(&game);
+
+
+        if (game.win) {
             game.end = 1;
         }
         draw(win, game);
