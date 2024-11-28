@@ -1,24 +1,24 @@
 #include <iostream>
-#include<time.h>
+#include <ctime>
 #include <ncurses.h>			/* ncurses.h includes stdio.h */
 #include <unistd.h>
-// using namespace std;
 
 #define PROJECT_NAME "Jumping Frog"
 #define BOARD_WIDTH (int)60
-#define BOARD_HEIGHT (int)30
-#define DELAY 30000
+#define BOARD_HEIGHT (int)20
+#define DELAY 60000
 
 int getRandomNumber(int min, int max) {
     return rand() % (max + 1 - min) + min;
 
 }
 
+enum ObstacleType {
+    CAR,
+    CACTUS
+};
+
 struct Obstacle {
-    enum ObstacleType {
-        CAR,
-        CACTUS
-    };
 
     int y;
     int x;
@@ -31,11 +31,11 @@ struct Obstacle {
 struct Exit {
     int x;
     int y;
-    char skin = 'W';
+    char skin = '^';
 };
 
 struct Frog {
-    const char skin = '|';
+    const char skin = 'O';
     int x;
     int y;
 };
@@ -44,7 +44,8 @@ struct Game {
     int end = 0;
     bool win = false;
     int level;
-    int start_time;
+    long start_time;
+    long play_time;
     Exit exit;
     Frog frog;
     int obstacleCount = 0;
@@ -55,37 +56,40 @@ void addObstacle(Game *game, Obstacle obstacle) {
     game->obstacle[game->obstacleCount] = obstacle;
     game->obstacleCount++;
 }
+
 void initGame(Game *game) {
     game->level = 1;
     game->frog.x = BOARD_WIDTH/2;
     game->frog.y = BOARD_HEIGHT;
 }
 
-int getElapsedTime(int *ts) {
+long getElapsedTime(const long *ts) {
     // clock_t end = clock();
-    int end = time(NULL);
+    const long end = time(nullptr);
     return (end - *ts);
 };
 
 void draw(WINDOW *win, Game game) {
-    wclear(win);
+    werase(win);
 
     // Box and board setup
     box(win, 0, 0);
     mvwprintw(win, 0, (BOARD_WIDTH-sizeof(PROJECT_NAME)/sizeof(char))/2 , PROJECT_NAME);
     mvwprintw(win, BOARD_HEIGHT+1, 4*BOARD_WIDTH/5, " Level: %d ", game.level);
-    mvwprintw(win, 0, 7*BOARD_WIDTH/10, "Time: %d", getElapsedTime(&game.start_time));
+    mvwprintw(win, 0, 7*BOARD_WIDTH/10, "Time: %ld", game.play_time);
 
     if (game.end) {
         if (game.win) {
             wattron(win, COLOR_PAIR(2));
             mvwprintw(win, BOARD_HEIGHT/2, (BOARD_WIDTH - 7)/2, "You won!");
+            mvwprintw(win, BOARD_HEIGHT/2+1, (BOARD_WIDTH - 28)/2, "Your game took %ld seconds!", game.play_time);
             wattroff(win, COLOR_PAIR(2));
         }else {
             wattron(win, COLOR_PAIR(2));
             mvwprintw(win, BOARD_HEIGHT/2, (BOARD_WIDTH - 9)/2, "Game Over");
             wattroff(win, COLOR_PAIR(2));
         }
+        mvwprintw(win, BOARD_HEIGHT-2, (BOARD_WIDTH - 15)/2, "Press Q to quit");
     }else {
         // Player
 
@@ -123,35 +127,85 @@ void cursesInit() {
     init_pair(3, COLOR_RED, COLOR_BLACK);
 }
 
-void levelInit(Game *game) {
+int *getLevelData(int level) {
+    int row_i = BOARD_HEIGHT - 3;
+    int trap_rows[row_i];
+    unsigned int car_row_num = 0;
+    unsigned int cactus_row_num = 0;
+
+    for (int i = 0; i < row_i; i++) {
+        trap_rows[i] = -1;
+    }
+
+    switch (level) {
+        case 1:
+            cactus_row_num = 8;
+            car_row_num = 8;
+            if (cactus_row_num + car_row_num > row_i) {
+                throw std::out_of_range("Obstacle row number grater then row number");
+            }
+
+            // ustaw odpowiednia ilosc kaktusuow
+            for (int i = 0; i < cactus_row_num; i++) {
+                unsigned int row_num;
+                do {
+                    row_num = getRandomNumber(0, row_i);
+                } while (trap_rows[row_num] != -1);
+                trap_rows[row_num] = CACTUS;
+            }
+
+            for (int i = 0; i < car_row_num; i++) {
+                unsigned int row_num;
+                do {
+                    row_num = getRandomNumber(0, row_i);
+                } while (trap_rows[row_num] != -1);
+                trap_rows[row_num] = CAR;
+            }
+            break;
+        default:
+            break;
+    }
+
+    int * trap_rows_ptr =  (int *) malloc(sizeof(int) * (row_i));
+    for (int i = 0; i < row_i; i++) {
+        trap_rows_ptr[i] = trap_rows[i];
+    }
+
+    return trap_rows_ptr;
+}
+
+void levelInit(Game *game, int level) {
     Exit exit;
     exit.x = BOARD_WIDTH/2;
     exit.y = 1;
     game->exit = exit;
 
-    // stationary
-    for (int i = 0; i < 5; i++) {
-        Obstacle test;
-        test.x = getRandomNumber(2, BOARD_WIDTH-1);
-        test.y = getRandomNumber(1,BOARD_HEIGHT-1);
-        test.type = Obstacle::CACTUS;
-        test.speed = 0;
+    int trap_row_i = BOARD_HEIGHT - 2;
+    int * trap_rows = getLevelData(level);
 
-        addObstacle(game, test);
+    for (int i = 0; i < trap_row_i; i++) {
+        if (trap_rows[i] == CAR) {
+            Obstacle obs;
+            obs.x = getRandomNumber(2, BOARD_WIDTH-1);
+            obs.y = i+2;
+            obs.type = CAR;
+            obs.skin = '*';
+            obs.speed = getRandomNumber(1,3);
+
+            addObstacle(game, obs);
+
+        }else if (trap_rows[i] == CACTUS) {
+            Obstacle obs;
+            obs.x = getRandomNumber(2, BOARD_WIDTH-1);
+            obs.y = i+2;
+            obs.type = CACTUS;
+            obs.speed = 0;
+
+            addObstacle(game, obs);
+        }
     }
 
-    // Moving ones
-    for (int i = 0; i < 15; i++) {
-        Obstacle test;
-        test.x = getRandomNumber(2, BOARD_WIDTH-1);
-        test.y = getRandomNumber(1,BOARD_HEIGHT-1);
-        test.speed = getRandomNumber(1,3);
-        test.skin = '*';
-        test.type = Obstacle::CAR;
-
-        addObstacle(game, test);
-    }
-
+    // Obstacle test;
     // test.x = 50;
     // test.y = 20;
     // test.speed = 1;
@@ -159,6 +213,8 @@ void levelInit(Game *game) {
     // test.type = Obstacle::CAR;
     //
     // addObstacle(game, test);
+
+    free(trap_rows);
 }
 
 
@@ -190,7 +246,7 @@ bool checkWin(Game *game) {
 void moveObstacles(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
         Obstacle *obstacle = &(game->obstacle[i]);
-        if (obstacle->type == Obstacle::CAR) {
+        if (obstacle->type == CAR) {
             for (int j = 0; j < obstacle->speed; j++) {
                 if (obstacle->x <= 1 || obstacle->x >= BOARD_WIDTH) obstacle->direction *=-1;
                 obstacle->x += 1*obstacle->direction;
@@ -201,7 +257,7 @@ void moveObstacles(Game *game) {
 }
 
 int main(int argc, char *argv[]) {
-    srand(time(NULL));
+    srand(time(nullptr));
     cursesInit();
 
     struct Terminal{
@@ -216,11 +272,11 @@ int main(int argc, char *argv[]) {
     keypad(stdscr, TRUE);
 
     Game game;
-    game.start_time = time(NULL);
+    game.start_time = time(nullptr);
     initGame(&game);
     draw(win, game);
 
-    levelInit(&game);
+    levelInit(&game, 1);
     draw(win, game);
 
     int input_b;
@@ -247,7 +303,7 @@ int main(int argc, char *argv[]) {
 
         moveObstacles(&game);
         checkWin(&game);
-
+        game.play_time = getElapsedTime(&game.start_time);
 
         if (game.win) {
             game.end = 1;
@@ -256,7 +312,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    wgetch(win);
+    while (wgetch(win) != 'q') {}
     endwin();
     return 0;
 }
