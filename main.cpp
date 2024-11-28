@@ -167,7 +167,7 @@ int *getLevelData(int level) {
         for (int i = 0; i < row_i; i++) {
             trap_rows[i] = -1;
         }
-        fill_trap_rows(trap_rows,row_i, 3, 2);
+        fill_trap_rows(trap_rows,row_i, 3, 1);
 
         int * trap_rows_ptr =  (int *) malloc(sizeof(int) * (row_i));
         for (int i = 0; i < row_i; i++) {
@@ -177,14 +177,16 @@ int *getLevelData(int level) {
         return trap_rows_ptr;
     }else if (level == 2) {
         board_height = 32;
+        // board_height = 20;
         board_width = 51;
+        // board_width = 20;
 
         row_i = board_height - 3;
         int trap_rows[row_i];
         for (int i = 0; i < row_i; i++) {
             trap_rows[i] = -1;
         }
-        fill_trap_rows(trap_rows,row_i, 8, 8);
+        fill_trap_rows(trap_rows,row_i, 15, 8);
 
         int * trap_rows_ptr =  (int *) malloc(sizeof(int) * (row_i));
         for (int i = 0; i < row_i; i++) {
@@ -289,8 +291,19 @@ WINDOW * initWindow() {
     return win;
 };
 
-int main(int argc, char *argv[]) {
+WINDOW *get_next_level(WINDOW **win, Game *game) {
+    for (int i = 0; i < game->obstacleCount; i++) {
+        Obstacle obstacle;
+        game->obstacle[i] = obstacle;
+    }
+    game->obstacleCount = 0;
 
+    levelInit(game, game->level);
+
+    return (initWindow());
+}
+
+int main(int argc, char *argv[]) {
     srand(time(nullptr));
     cursesInit();
     WINDOW *win;
@@ -329,7 +342,12 @@ int main(int argc, char *argv[]) {
         game.play_time = getElapsedTime(&game.start_time);
 
         if (game.win) {
-            game.end = 1;
+            if (game.level > 2) {
+                game.end = true;
+            }else {
+                win = get_next_level(&win, &game);
+                game.win = false;
+            }
         }
         draw(win, game);
     }
@@ -339,3 +357,4 @@ int main(int argc, char *argv[]) {
     endwin();
     return 0;
 }
+
