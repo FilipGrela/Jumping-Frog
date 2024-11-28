@@ -52,8 +52,8 @@ struct Game {
     Obstacle obstacle[50];  //TODO: dynamiczna alokacja miejsca
 };
 
-void addObstacle(Game *game, Obstacle obstacle) {
-    game->obstacle[game->obstacleCount] = obstacle;
+void addObstacle(Game *game, const Obstacle * obstacle) {
+    game->obstacle[game->obstacleCount] = *obstacle;
     game->obstacleCount++;
 }
 
@@ -145,7 +145,7 @@ int *getLevelData(int level) {
                 throw std::out_of_range("Obstacle row number grater then row number");
             }
 
-            // ustaw odpowiednia ilosc kaktusuow
+            // ustaw odpowiednia ilość kaktusów
             for (int i = 0; i < cactus_row_num; i++) {
                 unsigned int row_num;
                 do {
@@ -192,7 +192,7 @@ void levelInit(Game *game, int level) {
             obs.skin = '*';
             obs.speed = getRandomNumber(1,3);
 
-            addObstacle(game, obs);
+            addObstacle(game, &obs);
 
         }else if (trap_rows[i] == CACTUS) {
             Obstacle obs;
@@ -201,10 +201,10 @@ void levelInit(Game *game, int level) {
             obs.type = CACTUS;
             obs.speed = 0;
 
-            addObstacle(game, obs);
+            addObstacle(game, &obs);
         }
     }
-
+    workflow_test();
     // Obstacle test;
     // test.x = 50;
     // test.y = 20;
