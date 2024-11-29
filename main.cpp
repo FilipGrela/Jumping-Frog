@@ -334,8 +334,17 @@ int main(int argc, char *argv[]) {
 
     int input_b;
 
+    time_t forg_move_dt = 0;
     while (!game.end) {
+        time_t startTime = time(nullptr);
         input_b = getch();
+
+        if (input_b != -1) {
+            forg_move_dt = 0;
+        }
+
+        if (forg_move_dt >= 5)
+            game.end = true;
 
         if (input_b == 'w' || input_b == KEY_UP) {
             if (game.frog.y > 1)
@@ -367,6 +376,8 @@ int main(int argc, char *argv[]) {
             }
         }
         draw(win, game);
+
+        forg_move_dt += time(nullptr) - startTime;
     }
 
 
