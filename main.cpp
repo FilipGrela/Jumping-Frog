@@ -8,6 +8,12 @@
 // #define BOARD_HEIGHT (int)20
 #define DELAY 60000
 
+#define FROG_PAIR_COLOR 1
+#define EXIT_PAIR_COLOR 2
+#define COLOR_PAIR_SAFE 4
+#define COLOR_PAIR_DANGER 5
+#define COLOR_PAIR_CACTUS 6
+
 int board_width = 0;
 int board_height = 0;
 
@@ -17,30 +23,31 @@ int getRandomNumber(int min, int max) {
 }
 
 enum ObstacleType {
+    NONE,
     CAR,
     CACTUS
 };
 
 struct Obstacle {
-
+    int color_pair = COLOR_PAIR_DANGER;
     int y = -1;
     int x = -1;
-    unsigned int speed;
+    unsigned int speed = 0;
     int direction = 1;
     char skin = 'X';
-    ObstacleType type;
+    ObstacleType type = NONE;
 };
 
 struct Exit {
-    int x;
-    int y;
+    int x = 1;
+    int y = 1;
     char skin = '^';
 };
 
 struct Frog {
     const char skin = 'O';
-    int x;
-    int y;
+    int x = 0;
+    int y = 1;
 };
 
 struct Game {
@@ -73,6 +80,7 @@ long getElapsedTime(const long *ts) {
 
 void draw(WINDOW *win, Game game) {
     werase(win);
+    wbkgd(win, COLOR_PAIR(COLOR_PAIR_SAFE));
 
     // Box and board setup
     box(win, 0, 0);
@@ -93,22 +101,26 @@ void draw(WINDOW *win, Game game) {
         }
         mvwprintw(win, board_height-2, (board_width - 15)/2, "Press Q to quit");
     }else {
-        // Player
-
-        wattron(win, COLOR_PAIR(2));
-        mvwprintw(win, game.exit.y, game.exit.x-1, "%c", game.exit.skin);
-        wattroff(win, COLOR_PAIR(1));
-
-        wattron(win, COLOR_PAIR(1));
-        mvwprintw(win, game.frog.y, game.frog.x-1, "%c",game.frog.skin);
-        wattroff(win, COLOR_PAIR(1));
         // Obstacle
         for (int i = 0; i < game.obstacleCount; i++) {
             Obstacle obstacle = game.obstacle[i];
-            wattron(win, COLOR_PAIR(3));
+            for (int x = 1; x <= board_width; x++) {
+                wattron(win, COLOR_PAIR(obstacle.color_pair));
+                mvwprintw(win, obstacle.y, x, " ");
+            }
             mvwprintw(win, obstacle.y, obstacle.x, "%c", obstacle.skin);
-            wattroff(win, COLOR_PAIR(3));
+            wattron(win, COLOR_PAIR(obstacle.color_pair));
+
         }
+
+        // Player
+        wattron(win, COLOR_PAIR(EXIT_PAIR_COLOR));
+        mvwprintw(win, game.exit.y, game.exit.x-1, "%c", game.exit.skin);
+        wattroff(win, COLOR_PAIR(EXIT_PAIR_COLOR));
+
+        wattron(win, COLOR_PAIR(FROG_PAIR_COLOR));
+        mvwprintw(win, game.frog.y, game.frog.x-1, "%c",game.frog.skin);
+        wattroff(win, COLOR_PAIR(FROG_PAIR_COLOR));
     }
     wrefresh(win);
     usleep(DELAY);
@@ -123,10 +135,15 @@ void cursesInit() {
     start_color();
     clear();
     refresh();
+    //                          font color   bg color
+    init_pair(FROG_PAIR_COLOR, COLOR_BLACK, COLOR_GREEN);
+    init_pair(EXIT_PAIR_COLOR, COLOR_WHITE, COLOR_GREEN);
+    init_pair(3, COLOR_WHITE, COLOR_BLACK);
 
-    init_pair(1, COLOR_GREEN, COLOR_BLACK);
-    init_pair(2, COLOR_WHITE, COLOR_RED);
-    init_pair(3, COLOR_RED, COLOR_BLACK);
+    init_pair(COLOR_PAIR_SAFE, COLOR_GREEN, COLOR_BLUE);
+    init_pair(COLOR_PAIR_DANGER, COLOR_RED, COLOR_MAGENTA);
+
+    init_pair(COLOR_PAIR_CACTUS, COLOR_RED, COLOR_YELLOW);
 }
 
 void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, int car_row_num){
@@ -177,9 +194,7 @@ int *getLevelData(int level) {
         return trap_rows_ptr;
     }else if (level == 2) {
         board_height = 32;
-        // board_height = 20;
         board_width = 51;
-        // board_width = 20;
 
         row_i = board_height - 3;
         int trap_rows[row_i];
@@ -218,6 +233,7 @@ void levelInit(Game *game, int level) {
             obs.x = getRandomNumber(2, board_width-1);
             obs.y = i+2;
             obs.type = CAR;
+            obs.color_pair = COLOR_PAIR_DANGER;
             obs.skin = '*';
             obs.speed = getRandomNumber(1,3);
 
@@ -228,6 +244,7 @@ void levelInit(Game *game, int level) {
             obs.x = getRandomNumber(2, board_width-1);
             obs.y = i+2;
             obs.type = CACTUS;
+            obs.color_pair = COLOR_PAIR_CACTUS;
             obs.speed = 0;
 
             addObstacle(game, obs);
