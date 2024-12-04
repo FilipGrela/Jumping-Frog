@@ -1,17 +1,29 @@
 import re
 from tabulate import tabulate
-from colorama import Fore, Style, init
+from colorama import Fore, Back, Style, init
 import argparse
 
 # Inicjalizacja kolorów (colorama)
-init()
+init(autoreset=True)
 
 # Łatwo edytowalny próg długości funkcji
 MAX_LENGTH = 2**10
 
+def remove_comments(code):
+    """Usuń komentarze jedno- i wieloliniowe z kodu."""
+    code_no_single_line_comments = re.sub(r'//.*', '', code)
+    code_no_comments = re.sub(r'/\*.*?\*/', '', code_no_single_line_comments, flags=re.DOTALL)
+    return code_no_comments
+
 def analyze_cpp_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
+        content = file.read()
+
+    # Usuń komentarze z kodu
+    content = remove_comments(content)
+
+    # Podziel plik na linie
+    lines = content.splitlines()
 
     results = []
     function_name = None
@@ -20,7 +32,7 @@ def analyze_cpp_file(file_path):
     brace_count = 0
 
     # Wyrażenie regularne do rozpoznania nagłówka funkcji
-    function_header_pattern = re.compile(r'(\w[\w\s*&]+)\s+(\w+)\s*\([^)]*\)\s*{')
+    function_header_pattern = re.compile(r'(\w[\w\s\*&]+)\s+(\w+)\s*\([^)]*\)\s*{')
 
     for line in lines:
         stripped_line = line.strip()
@@ -50,7 +62,10 @@ def analyze_cpp_file(file_path):
     # Formatowanie wyników
     formatted_results = []
     for name, length in results:
-        color = Fore.RED if length > MAX_LENGTH else Fore.GREEN
+        if length > MAX_LENGTH:
+            color = Fore.WHITE + Back.RED
+        else:
+            color = Fore.WHITE + Back.GREEN
         formatted_results.append([f"{color}{name}{Style.RESET_ALL}", f"{color}{length}{Style.RESET_ALL}"])
 
     # Wyświetlenie wyników w tabeli

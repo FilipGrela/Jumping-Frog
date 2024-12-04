@@ -1,12 +1,15 @@
 Level_count: 3
+-------= Level =-------
 board_height: 10
 board_width: 25
 cactus_num: 2
 car_num: 1
+-------= Level =-------
 board_height: 25
 board_width: 30
 cactus_num: 4
 car_num: 6
+-------= Level =-------
 board_height: 32
 board_width: 40
 cactus_num: 5
