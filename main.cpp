@@ -158,7 +158,7 @@ void cursesInit() {
 
 void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, int car_row_num){
     if (cactus_row_num + car_row_num > row_number) {
-        throw std::out_of_range("Obstacle row number grater then row number");
+        throw std::out_of_range("Obstacle row number grater then row number %d");
     }
 
     // ustaw odpowiednia ilość kaktusów
@@ -313,7 +313,6 @@ Level ** loadLevelsFile (char *fileName, int * level_count_p) {
     FILE *file = fopen(fileName, "r");
     if (file == NULL) {
         printf("Error opening file %s\n", fileName);
-        // return '';
     }
 
     fscanf(file, "Level_count: %d", level_count_p);
@@ -323,12 +322,16 @@ Level ** loadLevelsFile (char *fileName, int * level_count_p) {
 
     Level **level_arr =  (Level **) malloc(sizeof(Level*) * (level_count));
 
+    char *_;
     for (int i = 0; i < level_count; i++) {
+
         level_arr[i] = (Level *) malloc(sizeof(Level));
+        // fscanf(file, "%s", _);
         fscanf(file, "%*s %d", &lvl_height[i]);
         fscanf(file, "%*s %d", &lvl_width[i]);
         fscanf(file, "%*s %d", &lvl_cactus[i]);
         fscanf(file, "%*s %d", &lvl_car[i]);
+
 
         level_arr[i]->height = lvl_height[i];
         level_arr[i]->width = lvl_width[i];
@@ -337,7 +340,6 @@ Level ** loadLevelsFile (char *fileName, int * level_count_p) {
     }
     fclose(file);
 
-    (Level(*)[128])level_arr;
     return level_arr;
 }
 
@@ -397,7 +399,7 @@ int main(int argc, char *argv[]) {
         game.play_time = getElapsedTime(&game.start_time);
 
         if (game.win) {
-            if (game.level > 2) {
+            if (game.level > game.level_count) {
                 game.end = true;
             }else {
                 win = get_next_level(&win, &game);
