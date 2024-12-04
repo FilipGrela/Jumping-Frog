@@ -1,0 +1,9 @@
+Level_count: 2
+board_height: 10
+board_width: 25
+cactus_num: 3
+car_num: 4
+board_height: 32
+board_width: 51
+cactus_num: 3
+car_num: 4

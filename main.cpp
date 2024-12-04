@@ -14,6 +14,8 @@
 #define COLOR_PAIR_DANGER 5
 #define COLOR_PAIR_CACTUS 6
 
+#define CONFIG_PATH (char*) "../game-data.txt"
+
 int board_width = 0;
 int board_height = 0;
 
@@ -26,6 +28,13 @@ enum ObstacleType {
     NONE,
     CAR,
     CACTUS
+};
+
+struct Level {
+    int height;
+    int width;
+    int cactus_num;
+    int car_num;
 };
 
 struct Obstacle {
@@ -60,6 +69,8 @@ struct Game {
     Frog frog;
     int obstacleCount = 0;
     Obstacle obstacle[50];  //TODO: dynamiczna alokacja miejsca
+    Level **levels;
+    int level_count;
 };
 
 void addObstacle(Game *game, Obstacle obstacle) {
@@ -125,7 +136,6 @@ void draw(WINDOW *win, Game game) {
     wrefresh(win);
     usleep(DELAY);
 };
-
 void cursesInit() {
     initscr();
     noecho();
@@ -171,51 +181,31 @@ void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, i
 
 
 
-int *getLevelData(int level) {
+int *getLevelData(Game * game, int level) {
 
     int row_i = 0;
 
-    if (level == 1) {
-        board_height = 10;
-        board_width = 35;
-        row_i = board_height - 3;
+    Level current_level = *game->levels[level - 1];
+    board_height = current_level.height;
+    board_width = current_level.width;
+    row_i = board_height - 3;
 
-        int trap_rows[row_i];
-        for (int i = 0; i < row_i; i++) {
-            trap_rows[i] = -1;
-        }
-        fill_trap_rows(trap_rows,row_i, 3, 1);
+    int trap_rows[row_i];
+    for (int i = 0; i < row_i; i++) {
+        trap_rows[i] = -1;
+    }
+    fill_trap_rows(trap_rows,row_i, current_level.cactus_num, current_level.car_num);
 
-        int * trap_rows_ptr =  (int *) malloc(sizeof(int) * (row_i));
-        for (int i = 0; i < row_i; i++) {
-            trap_rows_ptr[i] = trap_rows[i];
-        }
-
-        return trap_rows_ptr;
-    }else if (level == 2) {
-        board_height = 32;
-        board_width = 51;
-
-        row_i = board_height - 3;
-        int trap_rows[row_i];
-        for (int i = 0; i < row_i; i++) {
-            trap_rows[i] = -1;
-        }
-        fill_trap_rows(trap_rows,row_i, 15, 8);
-
-        int * trap_rows_ptr =  (int *) malloc(sizeof(int) * (row_i));
-        for (int i = 0; i < row_i; i++) {
-            trap_rows_ptr[i] = trap_rows[i];
-        }
-
-        return  trap_rows_ptr;
+    int * trap_rows_ptr =  (int *) malloc(sizeof(int) * (row_i));
+    for (int i = 0; i < row_i; i++) {
+        trap_rows_ptr[i] = trap_rows[i];
     }
 
-    return nullptr;
+    return trap_rows_ptr;
 }
 
 void levelInit(Game *game, int level) {
-    int * trap_rows = getLevelData(level);
+    int * trap_rows = getLevelData(game, level);
     int trap_row_i = board_height - 2;
 
     Exit exit;
@@ -256,7 +246,6 @@ void levelInit(Game *game, int level) {
 
 
 /** @brief Function checks if frog collides with obstacle
- *
  *
  *  @return true if frog collides with obstacle
  */
@@ -320,12 +309,53 @@ WINDOW *get_next_level(WINDOW **win, Game *game) {
     return (initWindow());
 }
 
+Level ** loadLevelsFile (char *fileName, int * level_count_p) {
+    FILE *file = fopen(fileName, "r");
+    if (file == NULL) {
+        printf("Error opening file %s\n", fileName);
+        // return '';
+    }
+
+    fscanf(file, "Level_count: %d", level_count_p);
+    int level_count = *level_count_p;
+
+    int lvl_width[level_count], lvl_height[level_count], lvl_car[level_count], lvl_cactus[level_count];
+
+    Level **level_arr =  (Level **) malloc(sizeof(Level*) * (level_count));
+
+    for (int i = 0; i < level_count; i++) {
+        level_arr[i] = (Level *) malloc(sizeof(Level));
+        fscanf(file, "%*s %d", &lvl_height[i]);
+        fscanf(file, "%*s %d", &lvl_width[i]);
+        fscanf(file, "%*s %d", &lvl_cactus[i]);
+        fscanf(file, "%*s %d", &lvl_car[i]);
+
+        level_arr[i]->height = lvl_height[i];
+        level_arr[i]->width = lvl_width[i];
+        level_arr[i]->car_num = lvl_cactus[i];
+        level_arr[i]->cactus_num = lvl_car[i];
+    }
+    fclose(file);
+
+    (Level(*)[128])level_arr;
+    return level_arr;
+}
+
+void mem_free_lvl(Level *** level, int level_count) {
+    for (int i = 0; i < level_count; i++) {
+        free(level[i]);
+    }
+    free(level);
+};
+
 int main(int argc, char *argv[]) {
     srand(time(nullptr));
     cursesInit();
     WINDOW *win;
 
     Game game;
+    game.levels = loadLevelsFile(CONFIG_PATH, &game.level_count);
+
     initGame(&game);
 
     levelInit(&game, game.level);
@@ -339,9 +369,8 @@ int main(int argc, char *argv[]) {
         time_t startTime = time(nullptr);
         input_b = getch();
 
-        if (input_b != -1) {
+        if (input_b != -1)
             forg_move_dt = 0;
-        }
 
         if (forg_move_dt >= 5)
             game.end = true;
@@ -382,6 +411,7 @@ int main(int argc, char *argv[]) {
 
 
     while (wgetch(win) != 'q') {}
+    mem_free_lvl(&game.levels, game.level_count);
     endwin();
     return 0;
 }
