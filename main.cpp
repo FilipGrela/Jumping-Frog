@@ -21,6 +21,8 @@
 #define COLOR_P_TITLE_LOOSE 8
 #define COLOR_P_BACKGROUND 9
 
+#define SCOREBOARD_SIZE 5
+
 #define CONFIG_PATH (char*) "../game-data.txt"
 
 enum ObstacleType {
@@ -203,7 +205,7 @@ void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, i
             do {
                 row_num = getRandomNumber(0, row_number);
             } while (trap_rows[row_num] != -1);
-            trap_rows[row_num] = CAR; //TODO: sdsd
+            trap_rows[row_num] = CAR;
         }
     }
 }
@@ -368,6 +370,75 @@ double calculate_distance(int x1, int y1, int x2, int y2) {
     return   sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
 }
 
+void bubbleSort(int* array, int n) {
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - i - 1; j++) {
+            if (array[j] > array[j + 1]) {
+                // Zamiana elementów
+                int temp = array[j];
+                array[j] = array[j + 1];
+                array[j + 1] = temp;
+            }
+        }
+    }
+}
+
+void saveSortedArrayToFile(const char* filename, int* array, int n) {
+    // Sortowanie tablicy - sortowanie bąbelkowe
+    bubbleSort(array, n);
+
+    // Zapis posortowanej tablicy do pliku
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        printf("Blad otwierania pliku do zapisu.\n");
+        return;
+    }
+
+    for (int i = 0; i < n; i++) {
+        fprintf(file, "%d\n", array[i]);
+    }
+
+    fclose(file);
+    printf("Tablica zapisana do pliku w porządku posortowanym.\n");
+}
+
+int* readArray(const char* filename, int n) {
+    FILE* file = fopen(filename, "r");
+    int* array = (int*)malloc(n * sizeof(int));
+
+    if (!array) {
+        printf("Blad alokacji pamieci.\n");
+        return nullptr;
+    }
+
+    if (file) {
+        // Plik istnieje, odczytaj dane
+        for (int i = 0; i < n; i++) {
+            if (fscanf(file, "%d", &array[i]) != 1) {
+                printf("Blad odczytu danych z pliku.\n");
+                free(array);
+                return NULL;
+            }
+        }
+    } else {
+        // Plik nie istnieje, utworz nowy
+        file = fopen(filename, "w");
+        if (!file) {
+            printf("Blad otwierania pliku do zapisu.\n");
+            free(array);
+            return NULL;
+        }
+
+        for (int i = 0; i < n; i++) {
+            array[i] = -1;  // Wypełnij tablicę
+            fprintf(file, "%d\n", array[i]);
+        }
+    }
+    fclose(file);
+
+    bubbleSort(array, n);
+    return array;
+}
 
 void moveObstacles(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
@@ -496,6 +567,12 @@ void handleControls(int input_b, Game * game) {
 }
 
 int main(int argc, char *argv[]) {
+    char fileName[] = "scoreboard.txt";
+    int *arrrr = readArray(fileName, SCOREBOARD_SIZE);
+
+    int arr[SCOREBOARD_SIZE] = {5,6,4,2,1};
+    saveSortedArrayToFile(fileName, arr,SCOREBOARD_SIZE);
+
     srand(time(nullptr));
     cursesInit();
     WINDOW *win;
