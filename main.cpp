@@ -22,6 +22,10 @@
 #define COLOR_P_BACKGROUND 9
 
 #define SCOREBOARD_SIZE 5
+#define SCOREBOARD_PATH "scoreboard.txt"
+
+
+#define CAR_LINE_CHANGE_CHANSE 20
 
 #define CONFIG_PATH (char*) "../game-data.txt"
 
@@ -150,13 +154,13 @@ WINDOW * initWindowCentered(int board_height, int board_width) {
 void draw_scoreboard(const Game & game, int scores[SCOREBOARD_SIZE]) {
     Coordinate terminalSize;
     getmaxyx(stdscr, terminalSize.y, terminalSize.x);
-    WINDOW *win_scoreboard = initWindowCoords(SCOREBOARD_SIZE + 2, 15, (terminalSize.y - game.board_height-2)/2,  (terminalSize.x - game.board_width-2)/2 - (SCOREBOARD_SIZE + 15));
-    box(win_scoreboard, 0, 0);
+    WINDOW *win_scoreboard = initWindowCoords(SCOREBOARD_SIZE + 2, 17, (terminalSize.y - game.board_height-2)/2,  (terminalSize.x - game.board_width-2)/2 - (SCOREBOARD_SIZE + 15));
+    box(win_scoreboard, '|', '-');
     mvwprintw(win_scoreboard, 0, 1, "Place");
     mvwprintw(win_scoreboard, 0, 9, "Score");
 
     for (int i = 1; i < SCOREBOARD_SIZE+1; i++) {
-        mvwprintw(win_scoreboard, i, 1, " %d.   | %d", i, scores[i-1]);
+        mvwprintw(win_scoreboard, i, 1, " %d.   | %ds", i, scores[i-1]);
     }
 
     wrefresh(win_scoreboard);
@@ -378,16 +382,32 @@ void moveToDifferentLane(Obstacle * obstacles, Coordinate player_coordinate, int
     for (int i = 0; i < lane_number; i++) {
         free_lanes[i] = -1;
     }
+    free_lanes[0] = 1;
+    free_lanes[lane_number-1] = 1;
+
+    Obstacle ss[obs_count];
+    for (int i = 0; i < obs_count; i++) {
+        ss[i] = obstacles[i];
+    }
 
     for (int i = 0; i < obs_count; i++) {
-        free_lanes[obstacles[i].y] = obstacles->type;
+        free_lanes[obstacles[i].y-1] = obstacles[i].type;
     }
-    int new_y;
-    do{
-        new_y = getRandomNumber(2, lane_number+2);
+    free_lanes[player_coordinate.y-1] = 1;
 
-    } while (free_lanes[new_y] != -1 && new_y != player_coordinate.y);
-    obstacles[curr_obs_id].y = new_y;
+    int new_y;
+    long start_t = clock();
+    do{
+        // if ((clock() - start_t )/ CLOCKS_PER_SEC >= 0.2 ) break;
+        new_y = getRandomNumber(1, lane_number-1);
+
+    } while (free_lanes[new_y] != -1);
+    obstacles[curr_obs_id].y = new_y+1;
+    Obstacle sss[obs_count];
+    for (int i = 0; i < obs_count; i++) {
+        sss[i] = obstacles[i];
+    }
+    sleep(0);
 }
 
 double sqrt(double x) {
@@ -424,8 +444,16 @@ double calculate_distance(int x1, int y1, int x2, int y2) {
 void bubbleSort(int* array, int n) {
     for (int i = 0; i < n - 1; i++) {
         for (int j = 0; j < n - i - 1; j++) {
-            if (array[j] > array[j + 1]) {
+            // Sprawdzamy, czy oba elementy są różne od -1
+            if (array[j] != -1 && array[j + 1] != -1 && array[j] > array[j + 1]) {
                 // Zamiana elementów
+                int temp = array[j];
+                array[j] = array[j + 1];
+                array[j + 1] = temp;
+            }
+            // Jeśli array[j] jest -1, nie zamieniamy miejscami z array[j+1], nawet jeśli array[j+1] < array[j]
+            else if (array[j] == -1 && array[j + 1] != -1) {
+                // Przesuń -1 na koniec tablicy
                 int temp = array[j];
                 array[j] = array[j + 1];
                 array[j + 1] = temp;
@@ -433,6 +461,8 @@ void bubbleSort(int* array, int n) {
         }
     }
 }
+
+
 
 void saveSortedArrayToFile(const char* filename, int* array, int n) {
     // Sortowanie tablicy — sortowanie bąbelkowe
@@ -461,14 +491,30 @@ int* readArray(const char* filename, int n) {
 
     if (file) {
         // Plik istnieje, odczytaj dane
-        for (int i = 0; i < n; i++) {
-            if (fscanf(file, "%d", &array[i]) != 1) {
-                free(array);
-                return nullptr;
+        int i = 0;
+        while (i < n && fscanf(file, "%d", &array[i]) == 1) {
+            i++;
+        }
+
+        // Jeśli nie odczytano wystarczającej liczby danych, uzupełnij pozostałe miejsca -1
+        for (int j = i; j < n; j++) {
+            array[j] = -1;
+        }
+
+        // Jeśli nie odczytano wszystkich danych, zapisz brakujące do pliku
+        if (i < n) {
+            file = freopen(filename, "w", file);  // Zresetuj plik do trybu zapisu
+            if (file) {
+                for (int j = 0; j < n; j++) {
+                    fprintf(file, "%d ", array[j]);
+                }
             }
         }
+
+        fclose(file);
+        bubbleSort(array, n);
     } else {
-        // Plik nie istnieje, utwórz nowy
+        // Plik nie istnieje, utwórz nowy i wypełnij tablicę -1
         file = fopen(filename, "w");
         if (!file) {
             free(array);
@@ -476,12 +522,13 @@ int* readArray(const char* filename, int n) {
         }
 
         for (int i = 0; i < n; i++) {
-            array[i] = -1;  // Wypełnij tablicę
+            array[i] = -1;
+            fprintf(file, "%d ", array[i]); // Zapisz do pliku
         }
-    }
-    fclose(file);
 
-    bubbleSort(array, n);
+        fclose(file);
+    }
+
     return array;
 }
 
@@ -507,9 +554,9 @@ void moveObstacles(Game *game) {
             for (int j = 0; j < obstacle->speed; j++) {
                 if (obstacle->x <= 1 || obstacle->x >= game->board_width) {
                     obstacle->direction *=-1;
-                    if (getRandomNumber(1, 10) == 1) {
+                    if (getRandomNumber(1, 100) <= CAR_LINE_CHANGE_CHANSE) {
                         const Coordinate player_coords{game->frog.x ,game->frog.y};
-                        moveToDifferentLane(game->obstacle, player_coords, game->obstacleCount,i, game->board_height-3);
+                        moveToDifferentLane(game->obstacle, player_coords, game->obstacleCount,i, game->board_height);
                     }
                     if (getRandomNumber(1, 2) == 1) {
                         obstacle->speed = getRandomNumber(1, 3);
@@ -585,10 +632,7 @@ void handleControls(int input_b, Game * game) {
 }
 
 int main(int argc, char *argv[]) {
-    char fileName[] = "scoreboard.txt";
-
-    int arr[SCOREBOARD_SIZE] = {5,6,4,2,1};
-    saveSortedArrayToFile(fileName, arr,SCOREBOARD_SIZE);
+    char fileName[] = SCOREBOARD_PATH;
 
     srand(time(nullptr));
     cursesInit();
