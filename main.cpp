@@ -1,3 +1,5 @@
+#define TEST true
+
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -21,13 +23,6 @@
 
 #define CONFIG_PATH (char*) "../game-data.txt"
 
-
-
-int getRandomNumber(int min, int max) {
-    return rand() % (max + 1 - min) + min;
-
-}
-
 enum ObstacleType {
     NONE,
     CAR,
@@ -41,6 +36,11 @@ struct Level {
     int car_num;
 };
 
+struct Coordinate {
+    int x;
+    int y;
+};
+
 struct Obstacle {
     int color_pair = COLOR_P_DANGER;
     int y = -1;
@@ -49,6 +49,7 @@ struct Obstacle {
     int direction = 1;
     char skin = 'X';
     ObstacleType type = NONE;
+    bool stopped = true;
 };
 
 struct Exit {
@@ -79,7 +80,12 @@ struct Game {
     int board_width;
 };
 
-void addObstacle(Game *game, Obstacle obstacle) {
+int getRandomNumber(int min, int max) {
+    return rand() % (max + 1 - min) + min;
+
+}
+
+void addObstacle(Game *game, const Obstacle obstacle) {
     game->obstacle[game->obstacleCount] = obstacle;
     game->obstacleCount++;
 }
@@ -94,7 +100,15 @@ long getElapsedTime(const long *ts) {
     return (end - *ts);
 };
 
-void drawComunicats(WINDOW * win, bool win_game,  int board_height, int board_width, long play_time) {
+void drawError(char msg[]) {
+    Coordinate coord{};
+    getmaxyx(stdscr, coord.y, coord.x);
+    wattron(stdscr, COLOR_PAIR(COLOR_P_TITLE_LOOSE));
+    mvwprintw(stdscr, 1, (coord.x - 7)/2, msg);
+    wattroff(stdscr, COLOR_PAIR(COLOR_P_TITLE_LOOSE));
+}
+
+void drawCommunicates(WINDOW * win, bool win_game,  int board_height, int board_width, long play_time) {
     if (win_game) {
         wattron(win, COLOR_PAIR(COLOR_P_TITLE_WIN));
         mvwprintw(win, board_height/2, (board_width - 7)/2, "You won!");
@@ -108,7 +122,7 @@ void drawComunicats(WINDOW * win, bool win_game,  int board_height, int board_wi
     mvwprintw(win, board_height-2, (board_width - 15)/2, "Press Q to quit");
 };
 
-void draw(WINDOW *win, Game game) {
+void draw(WINDOW *win, const Game game) {
     werase(win);
     wbkgd(win, COLOR_PAIR(COLOR_P_BACKGROUND));
 
@@ -119,7 +133,7 @@ void draw(WINDOW *win, Game game) {
     mvwprintw(win, 0, 4*game.board_width/6, "Time: %ld", game.play_time);
 
     if (game.end) {
-        drawComunicats(win,game.win, game.board_height, game.board_width, game.play_time);
+        drawCommunicates(win,game.win, game.board_height, game.board_width, game.play_time);
     }else {
         // Obstacle
         for (int i = 0; i < game.obstacleCount; i++) {
@@ -155,6 +169,7 @@ void cursesInit() {
     start_color();
     clear();
     refresh();
+
     //                      font color     bg color
     init_pair(COLOR_P_FROG, COLOR_WHITE, COLOR_GREEN);
     init_pair(COLOR_P_EXIT, COLOR_GREEN, COLOR_BLACK);
@@ -164,29 +179,29 @@ void cursesInit() {
     init_pair(COLOR_P_TITLE_WIN, COLOR_BLACK, COLOR_GREEN);
     init_pair(COLOR_P_TITLE_LOOSE, COLOR_RED, COLOR_BLACK);
     init_pair(COLOR_P_BACKGROUND, COLOR_MAGENTA, COLOR_BLACK);
-    ;
+
 }
 
 void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, int car_row_num){
     if (cactus_row_num + car_row_num > row_number) {
-        // throw std::out_of_range("Obstacle row number grater then row number %d");
-    }
+        // drawError("Obstacle row number grater then row number!");
+    }else {
+        // ustaw odpowiednia ilość kaktusów
+        for (int i = 0; i < cactus_row_num; i++) {
+            unsigned int row_num;
+            do {
+                row_num = getRandomNumber(0, row_number);
+            } while (trap_rows[row_num] != -1);
+            trap_rows[row_num] = CACTUS;
+        }
 
-    // ustaw odpowiednia ilość kaktusów
-    for (int i = 0; i < cactus_row_num; i++) {
-        unsigned int row_num;
-        do {
-            row_num = getRandomNumber(0, row_number);
-        } while (trap_rows[row_num] != -1);
-        trap_rows[row_num] = CACTUS;
-    }
-
-    for (int i = 0; i < car_row_num; i++) {
-        unsigned int row_num;
-        do {
-            row_num = getRandomNumber(0, row_number);
-        } while (trap_rows[row_num] != -1);
-        trap_rows[row_num] = CAR;
+        for (int i = 0; i < car_row_num; i++) {
+            unsigned int row_num;
+            do {
+                row_num = getRandomNumber(0, row_number);
+            } while (trap_rows[row_num] != -1);
+            trap_rows[row_num] = CAR;
+        }
     }
 }
 
@@ -243,8 +258,8 @@ void levelInit(Game *game, int level) {
             obs.x = getRandomNumber(2, game->board_width-1);
             obs.y = i+2;
             obs.type = CACTUS;
+            obs.skin = 'X';
             obs.color_pair = COLOR_P_CACTUS;
-            obs.speed = 0;
 
             addObstacle(game, obs);
         }
@@ -276,7 +291,7 @@ bool checkWin(Game *game) {
     return false;
 }
 
-void moveToDifferentLane(Obstacle * obstacles, int obs_count, int curr_obs_id, int lane_number) {
+void moveToDifferentLane(Obstacle * obstacles, Coordinate player_coordinate, int obs_count, int curr_obs_id, int lane_number) {
     int free_lanes[lane_number];
     for (int i = 0; i < lane_number; i++) {
         free_lanes[i] = -1;
@@ -285,24 +300,64 @@ void moveToDifferentLane(Obstacle * obstacles, int obs_count, int curr_obs_id, i
     for (int i = 0; i < obs_count; i++) {
         free_lanes[obstacles[i].y] = obstacles->type;
     }
-    int old = obstacles[curr_obs_id].y;
     int new_y;
     do{
         new_y = getRandomNumber(2, lane_number+2);
 
-    } while (free_lanes[new_y] != -1);
+    } while (free_lanes[new_y] != -1 && new_y != player_coordinate.y);
     obstacles[curr_obs_id].y = new_y;
 }
+
+double sqrt(double x) {
+    if (x < 0) return -1; // Obsługa liczb ujemnych: zwracamy -1 jako błąd
+    if (x == 0 || x == 1) return x; // Pierwiastek z 0 lub 1 to 0 lub 1
+
+    double approx = x;        // Początkowe przybliżenie
+    double better_approx = 0.5 * (approx + x / approx); // Pierwsza iteracja
+
+    while (approx - better_approx > 1e-6 || better_approx - approx > 1e-6) {
+        approx = better_approx;
+        better_approx = 0.5 * (approx + x / approx);
+    }
+
+    return better_approx;
+}
+
+double pow(double base, int exp) {
+    if (exp == 0) return 1;         // Każda liczba do potęgi 0 to 1
+    if (exp < 0) return 1 / pow(base, -exp); // Obsługa ujemnych potęg
+
+    double half = pow(base, exp / 2);
+    if (exp % 2 == 0) {
+        return half * half;         // Gdy wykładnik jest parzysty
+    } else {
+        return half * half * base;  // Gdy wykładnik jest nieparzysty
+    }
+}
+
 
 void moveObstacles(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
         Obstacle *obstacle = &(game->obstacle[i]);
         if (obstacle->type == CAR) {
+            int distance_to_frog = sqrt((double) pow(game->frog.x - obstacle->x, 2) + pow(game->frog.y - obstacle->y, 2));
+            if (distance_to_frog < 2) {
+                // drawError("STOP");
+            }
+
+            char str[8];
+            sprintf(str, "%d", distance_to_frog%10);
+            drawError(str);
+
             for (int j = 0; j < obstacle->speed; j++) {
                 if (obstacle->x <= 1 || obstacle->x >= game->board_width) {
                     obstacle->direction *=-1;
                     if (getRandomNumber(1, 10) == 1) {
-                        moveToDifferentLane(game->obstacle, game->obstacleCount,i, game->board_height-3);
+                        const Coordinate player_coords{game->frog.x ,game->frog.y};
+                        moveToDifferentLane(game->obstacle, player_coords, game->obstacleCount,i, game->board_height-3);
+                    }
+                    if (getRandomNumber(1, 2) == 1) {
+                        obstacle->speed = getRandomNumber(1, 3);
                     }
                 }
                 obstacle->x += 1*obstacle->direction;
@@ -341,14 +396,12 @@ WINDOW *get_next_level(WINDOW **win, Game *game) {
 
 Level ** loadLevelsFile (char *fileName, int * level_count_p) {
     FILE *file = fopen(fileName, "r");
-    if (file == NULL) {
-        printf("Error opening file %s\n", fileName);
+    if (file == nullptr) {
+        // drawError("Error opening file");
     }
 
     fscanf(file, "Level_count: %d", level_count_p);
     int level_count = *level_count_p;
-
-    int lvl_width[level_count], lvl_height[level_count], lvl_car[level_count], lvl_cactus[level_count];
 
     Level **level_arr =  (Level **) malloc(sizeof(Level*) * (level_count));
 
@@ -379,9 +432,9 @@ Level ** loadLevelsFile (char *fileName, int * level_count_p) {
 
 void mem_free_lvl(Level *** level, int level_count) {
     for (int i = 0; i < level_count; i++) {
-        free(level[i]);
+        free(level[0][i]);
     }
-    free(level);
+    free(*level);
 };
 
 void handleControls(int input_b, Game * game) {
@@ -416,20 +469,23 @@ int main(int argc, char *argv[]) {
     win = initWindow(game.board_height, game.board_width);
     draw(win, game);
 
-    int input_b;
-
     time_t forg_move_dt = 0;
+    int last_input_b = -1;
     while (!game.end) {
         time_t startTime = time(nullptr);
-        input_b = getch();
+        int input_b = getch();
 
         if (input_b != -1)
             forg_move_dt = 0;
 
+        #if !TEST
         if (forg_move_dt >= 5)
             game.end = true;
+        #endif
 
-        handleControls(input_b, &game);
+        if (input_b != last_input_b && input_b != -1) {
+            handleControls(input_b, &game);
+        }
 
 
         moveObstacles(&game);
@@ -447,10 +503,12 @@ int main(int argc, char *argv[]) {
         draw(win, game);
 
         forg_move_dt += time(nullptr) - startTime;
+        last_input_b = input_b;
     }
 
-    while (wgetch(win) != 'q') {}
     mem_free_lvl(&game.levels, game.level_count);
+    while (wgetch(win) != 'q') {}
+
     endwin();
     return 0;
 }

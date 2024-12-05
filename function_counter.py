@@ -2,7 +2,6 @@ import re
 from tabulate import tabulate
 from colorama import Fore, Back, Style, init
 import argparse
-
 # Inicjalizacja kolorów (colorama)
 init(autoreset=True)
 

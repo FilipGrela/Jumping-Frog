@@ -1,8 +1,8 @@
-Level_count: 3
+Level_count: 2
 -------= Level =-------
 board_height: 10
 board_width: 25
-cactus_num: 2
+cactus_num: 5
 car_num: 1
 -------= Level =-------
 board_height: 25
