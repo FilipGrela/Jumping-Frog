@@ -49,7 +49,7 @@ struct Obstacle {
     int direction = 1;
     char skin = 'X';
     ObstacleType type = NONE;
-    bool stopped = true;
+    bool stoppable = false;
 };
 
 struct Exit {
@@ -104,7 +104,7 @@ void drawError(char msg[]) {
     Coordinate coord{};
     getmaxyx(stdscr, coord.y, coord.x);
     wattron(stdscr, COLOR_PAIR(COLOR_P_TITLE_LOOSE));
-    mvwprintw(stdscr, 1, (coord.x - 7)/2, msg);
+    mvwprintw(stdscr, 1, (coord.x - 7)/2, "%s", msg);
     wattroff(stdscr, COLOR_PAIR(COLOR_P_TITLE_LOOSE));
 }
 
@@ -250,6 +250,7 @@ void levelInit(Game *game, int level) {
             obs.color_pair = COLOR_P_DANGER;
             obs.skin = '*';
             obs.speed = getRandomNumber(1,3);
+            obs.stoppable = getRandomNumber(1,2) == 1;
 
             addObstacle(game, obs);
 
@@ -335,19 +336,29 @@ double pow(double base, int exp) {
     }
 }
 
+double calculate_distance(int x1, int y1, int x2, int y2) {
+    return   sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
+}
+
 
 void moveObstacles(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
         Obstacle *obstacle = &(game->obstacle[i]);
         if (obstacle->type == CAR) {
-            int distance_to_frog = sqrt((double) pow(game->frog.x - obstacle->x, 2) + pow(game->frog.y - obstacle->y, 2));
-            if (distance_to_frog < 2) {
-                // drawError("STOP");
+            unsigned int speed_buff = obstacle->speed;
+            double distance_to_frog = calculate_distance(game->frog.x, game->frog.y, obstacle->x, obstacle->y);
+            if (obstacle->stoppable && distance_to_frog <= 3) {
+                obstacle->speed = 0;
             }
 
-            char str[8];
-            sprintf(str, "%d", distance_to_frog%10);
-            drawError(str);
+            #if TEST
+            if (obstacle->stoppable) {
+                char str[16];
+                sprintf(str, "%f",distance_to_frog);
+                drawError(str);
+            }
+            #endif
+
 
             for (int j = 0; j < obstacle->speed; j++) {
                 if (obstacle->x <= 1 || obstacle->x >= game->board_width) {
@@ -363,6 +374,7 @@ void moveObstacles(Game *game) {
                 obstacle->x += 1*obstacle->direction;
                 checkCollision(game);
             }
+            obstacle->speed = speed_buff;
         }
     }
 }
