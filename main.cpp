@@ -8,24 +8,26 @@
 #include <stdlib.h>
 
 #define PROJECT_NAME "Jumping Frog"
-// #define BOARD_WIDTH (int)60
-// #define BOARD_HEIGHT (int)20
 #define DELAY 60000
 
 #define COLOR_P_FROG 1
 #define COLOR_P_EXIT 2
-// #define COLOR_P_SAFE 3
-#define COLOR_P_DANGER 4
-#define COLOR_P_CACTUS 5
-#define COLOR_P_TITLE_WIN 6
-#define COLOR_P_TITLE_LOOSE 7
-#define COLOR_P_BACKGROUND 8
+// #define COLOR_P_SAFE
+#define COLOR_P_DANGER 3
+#define COLOR_P_CAR_STOPPABLE 4
+#define COLOR_P_CAR_FRIENDLY 5
+#define COLOR_P_CACTUS 6
+#define COLOR_P_TITLE_WIN 7
+#define COLOR_P_TITLE_LOOSE 8
+#define COLOR_P_BACKGROUND 9
 
 #define CONFIG_PATH (char*) "../game-data.txt"
 
 enum ObstacleType {
     NONE,
     CAR,
+    CAR_STOPPABLE,
+    CAR_FRIENDLY,
     CACTUS
 };
 
@@ -49,7 +51,6 @@ struct Obstacle {
     int direction = 1;
     char skin = 'X';
     ObstacleType type = NONE;
-    bool stoppable = false;
 };
 
 struct Exit {
@@ -67,17 +68,17 @@ struct Frog {
 struct Game {
     int end = 0;
     bool win = false;
-    int level;
-    long start_time;
-    long play_time;
+    int level{};
+    long start_time{};
+    long play_time{};
     Exit exit;
     Frog frog;
     int obstacleCount = 0;
     Obstacle obstacle[50];  //TODO: dynamiczna alokacja miejsca
-    Level **levels;
-    int level_count;
-    int board_height;
-    int board_width;
+    Level **levels{};
+    int level_count{};
+    int board_height{};
+    int board_width{};
 };
 
 int getRandomNumber(int min, int max) {
@@ -179,6 +180,8 @@ void cursesInit() {
     init_pair(COLOR_P_TITLE_WIN, COLOR_BLACK, COLOR_GREEN);
     init_pair(COLOR_P_TITLE_LOOSE, COLOR_RED, COLOR_BLACK);
     init_pair(COLOR_P_BACKGROUND, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(COLOR_P_CAR_STOPPABLE, COLOR_WHITE, COLOR_RED);
+    init_pair(COLOR_P_CAR_FRIENDLY, COLOR_GREEN, COLOR_RED);
 
 }
 
@@ -200,7 +203,7 @@ void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, i
             do {
                 row_num = getRandomNumber(0, row_number);
             } while (trap_rows[row_num] != -1);
-            trap_rows[row_num] = CAR;
+            trap_rows[row_num] = CAR; //TODO: sdsd
         }
     }
 }
@@ -246,12 +249,24 @@ void levelInit(Game *game, int level) {
             Obstacle obs;
             obs.x = getRandomNumber(2, game->board_width-1);
             obs.y = i+2;
-            obs.type = CAR;
+            obs.type = getRandomNumber(1,100) <= 50 ? CAR_STOPPABLE : CAR;
+            obs.type = getRandomNumber(1,100) <= 50 ? CAR_STOPPABLE : CAR;
+
+            int random_num = getRandomNumber(1,100);
+
             obs.color_pair = COLOR_P_DANGER;
+            if (random_num < 33) {
+                obs.type = CAR;
+            } else if (33<=random_num && random_num<=66) {
+                obs.type = CAR_STOPPABLE;
+                obs.color_pair = COLOR_P_CAR_STOPPABLE;
+            } else if (random_num > 66) {
+                obs.type = CAR_FRIENDLY;
+                obs.color_pair = COLOR_P_CAR_FRIENDLY;
+            }
+
             obs.skin = '*';
             obs.speed = getRandomNumber(1,3);
-            obs.stoppable = getRandomNumber(1,2) == 1;
-
             addObstacle(game, obs);
 
         }else if (trap_rows[i] == CACTUS) {
@@ -278,7 +293,20 @@ void checkCollision(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
         Obstacle obstacle = game->obstacle[i];
         if (obstacle.y == game->frog.y && obstacle.x+1 == game->frog.x) {
-            game->end = true;
+            if (obstacle.type !=
+                CAR_FRIENDLY) {
+                game->end = true;
+            }else {
+
+                game->frog.x = (obstacle.direction == -1) ? obstacle.x : obstacle.x+2;
+                game->frog.y = obstacle.y;
+                if (game->frog.x <= 1) {
+                    game->frog.x = game->frog.x + 2;
+                }else if (game->frog.x >= game->board_width) {
+                    game->frog.x = game->board_width;
+                }
+            }
+
         }
     }
 }
@@ -310,11 +338,11 @@ void moveToDifferentLane(Obstacle * obstacles, Coordinate player_coordinate, int
 }
 
 double sqrt(double x) {
-    if (x < 0) return -1; // Obsługa liczb ujemnych: zwracamy -1 jako błąd
-    if (x == 0 || x == 1) return x; // Pierwiastek z 0 lub 1 to 0 lub 1
+    if (x < 0) return -1;
+    if (x == 0 || x == 1) return x;
 
-    double approx = x;        // Początkowe przybliżenie
-    double better_approx = 0.5 * (approx + x / approx); // Pierwsza iteracja
+    double approx = x;
+    double better_approx = 0.5 * (approx + x / approx);
 
     while (approx - better_approx > 1e-6 || better_approx - approx > 1e-6) {
         approx = better_approx;
@@ -325,14 +353,14 @@ double sqrt(double x) {
 }
 
 double pow(double base, int exp) {
-    if (exp == 0) return 1;         // Każda liczba do potęgi 0 to 1
-    if (exp < 0) return 1 / pow(base, -exp); // Obsługa ujemnych potęg
+    if (exp == 0) return 1;
+    if (exp < 0) return 1 / pow(base, -exp);
 
     double half = pow(base, exp / 2);
     if (exp % 2 == 0) {
-        return half * half;         // Gdy wykładnik jest parzysty
+        return half * half;
     } else {
-        return half * half * base;  // Gdy wykładnik jest nieparzysty
+        return half * half * base;
     }
 }
 
@@ -344,15 +372,15 @@ double calculate_distance(int x1, int y1, int x2, int y2) {
 void moveObstacles(Game *game) {
     for (int i = 0; i < game->obstacleCount; i++) {
         Obstacle *obstacle = &(game->obstacle[i]);
-        if (obstacle->type == CAR) {
+        if (obstacle->type == CAR|| obstacle->type == CAR_STOPPABLE || obstacle->type == CAR_FRIENDLY) {
             unsigned int speed_buff = obstacle->speed;
             double distance_to_frog = calculate_distance(game->frog.x, game->frog.y, obstacle->x, obstacle->y);
-            if (obstacle->stoppable && distance_to_frog <= 3) {
+            if (obstacle->type == CAR_STOPPABLE && distance_to_frog <= 3) {
                 obstacle->speed = 0;
             }
 
             #if TEST
-            if (obstacle->stoppable) {
+            if (obstacle->type == CAR_STOPPABLE) {
                 char str[16];
                 sprintf(str, "%f",distance_to_frog);
                 drawError(str);

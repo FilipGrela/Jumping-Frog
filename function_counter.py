@@ -2,6 +2,7 @@ import re
 from tabulate import tabulate
 from colorama import Fore, Back, Style, init
 import argparse
+
 # Inicjalizacja kolorów (colorama)
 init(autoreset=True)
 
@@ -58,18 +59,25 @@ def analyze_cpp_file(file_path):
                 function_name = None
                 function_body = []
 
+    # Posortuj wyniki od najkrótszej do najdłuższej funkcji
+    results.sort(key=lambda x: x[1])
+
     # Formatowanie wyników
     formatted_results = []
     for name, length in results:
+        text = ""
         if length > MAX_LENGTH:
             color = Fore.WHITE + Back.RED
+            text = "ERROR"
         else:
             color = Fore.WHITE + Back.GREEN
-        formatted_results.append([f"{color}{name}{Style.RESET_ALL}", f"{color}{length}{Style.RESET_ALL}"])
+            text = "OK"
+
+        formatted_results.append([f"{color}{name}{Style.RESET_ALL}", f"{color}{length}{Style.RESET_ALL}", f"{color}{text}{Style.RESET_ALL}"])
 
     # Wyświetlenie wyników w tabeli
     if formatted_results:
-        print(tabulate(formatted_results, headers=["Nazwa funkcji", "Długość (bez białych znaków)"], tablefmt="grid"))
+        print(tabulate(formatted_results, headers=["Nazwa funkcji", "Długość (bez białych znaków)", "Status"], tablefmt="grid"))
     else:
         print("Nie znaleziono żadnych funkcji w pliku.")
 
