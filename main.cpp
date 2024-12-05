@@ -25,7 +25,7 @@
 #define SCOREBOARD_PATH "scoreboard.txt"
 
 
-#define CAR_LINE_CHANGE_CHANSE 20
+#define CAR_LINE_CHANGE_CHANCE 20
 
 #define CONFIG_PATH (char*) "../game-data.txt"
 
@@ -158,9 +158,12 @@ void draw_scoreboard(const Game & game, int scores[SCOREBOARD_SIZE]) {
     box(win_scoreboard, '|', '-');
     mvwprintw(win_scoreboard, 0, 1, "Place");
     mvwprintw(win_scoreboard, 0, 9, "Score");
-
     for (int i = 1; i < SCOREBOARD_SIZE+1; i++) {
-        mvwprintw(win_scoreboard, i, 1, " %d.   | %ds", i, scores[i-1]);
+        if (scores[i-1] > 0) {
+            mvwprintw(win_scoreboard, i, 1, " %d.   | %ds", i, scores[i-1]);
+        }else {
+            mvwprintw(win_scoreboard, i, 1, " %d.   |", i);
+        }
     }
 
     wrefresh(win_scoreboard);
@@ -354,7 +357,6 @@ void checkCollision(Game *game) {
                 CAR_FRIENDLY) {
                 game->end = true;
             }else {
-
                 game->frog.x = (obstacle.direction == -1) ? obstacle.x : obstacle.x+2;
                 game->frog.y = obstacle.y;
                 if (game->frog.x <= 1) {
@@ -441,6 +443,13 @@ double calculate_distance(int x1, int y1, int x2, int y2) {
     return   sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
 }
 
+
+/**
+ * @brief Function sorts an array in ascending order, treating negative numbers as the largest value.
+ *
+ * @param array A pointer to the integer array to be sorted.
+ * @param n The number of elements in the array.
+ */
 void bubbleSort(int* array, int n) {
     for (int i = 0; i < n - 1; i++) {
         for (int j = 0; j < n - i - 1; j++) {
@@ -466,7 +475,7 @@ void bubbleSort(int* array, int n) {
 
 void saveSortedArrayToFile(const char* filename, int* array, int n) {
     // Sortowanie tablicy — sortowanie bąbelkowe
-    bubbleSort(array, n);
+    bubbleSort(array, n+1);
 
     // Zapis posortowanej tablicy do pliku
     FILE* file = fopen(filename, "w");
@@ -483,7 +492,7 @@ void saveSortedArrayToFile(const char* filename, int* array, int n) {
 
 int* readArray(const char* filename, int n) {
     FILE* file = fopen(filename, "r");
-    int* array = (int*)malloc(n * sizeof(int));
+    int* array = (int*)malloc((n+1) * sizeof(int));
 
     if (!array) {
         return nullptr;
@@ -506,7 +515,7 @@ int* readArray(const char* filename, int n) {
             file = freopen(filename, "w", file);  // Zresetuj plik do trybu zapisu
             if (file) {
                 for (int j = 0; j < n; j++) {
-                    fprintf(file, "%d ", array[j]);
+                    fprintf(file, "%d\n", array[j]);
                 }
             }
         }
@@ -523,7 +532,7 @@ int* readArray(const char* filename, int n) {
 
         for (int i = 0; i < n; i++) {
             array[i] = -1;
-            fprintf(file, "%d ", array[i]); // Zapisz do pliku
+            fprintf(file, "%d\n", array[i]); // Zapisz do pliku
         }
 
         fclose(file);
@@ -554,7 +563,7 @@ void moveObstacles(Game *game) {
             for (int j = 0; j < obstacle->speed; j++) {
                 if (obstacle->x <= 1 || obstacle->x >= game->board_width) {
                     obstacle->direction *=-1;
-                    if (getRandomNumber(1, 100) <= CAR_LINE_CHANGE_CHANSE) {
+                    if (getRandomNumber(1, 100) <= CAR_LINE_CHANGE_CHANCE) {
                         const Coordinate player_coords{game->frog.x ,game->frog.y};
                         moveToDifferentLane(game->obstacle, player_coords, game->obstacleCount,i, game->board_height);
                     }
@@ -651,6 +660,7 @@ int main(int argc, char *argv[]) {
 
     time_t forg_move_dt = 0;
     int last_input_b = -1;
+
     while (!game.end) {
         time_t startTime = time(nullptr);
         int input_b = getch();
@@ -675,6 +685,8 @@ int main(int argc, char *argv[]) {
         if (game.win) {
             if (game.level > game.level_count) {
                 game.end = true;
+                game.scores[SCOREBOARD_SIZE] = (int) game.play_time;
+                saveSortedArrayToFile(SCOREBOARD_PATH, game.scores, SCOREBOARD_SIZE);
             }else {
                 win = get_next_level(&win, &game);
                 game.win = false;
