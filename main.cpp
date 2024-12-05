@@ -81,6 +81,7 @@ struct Game {
     int level_count{};
     int board_height{};
     int board_width{};
+    int *scores;
 };
 
 int getRandomNumber(int min, int max) {
@@ -125,7 +126,44 @@ void drawCommunicates(WINDOW * win, bool win_game,  int board_height, int board_
     mvwprintw(win, board_height-2, (board_width - 15)/2, "Press Q to quit");
 };
 
+WINDOW * initWindowCoords(int board_height, int board_width, int start_x, int start_y) {
+    WINDOW *win = newwin(board_height, board_width, start_x, start_y);
+
+    keypad(win, TRUE);
+    keypad(stdscr, TRUE);
+    return win;
+};
+
+WINDOW * initWindowCentered(int board_height, int board_width) {
+    struct Terminal{
+        int width = 0;
+        int height = 0;
+    };
+
+    Terminal terminal;
+    getmaxyx(stdscr, terminal.height, terminal.width);
+    WINDOW *win =initWindowCoords(board_height+2, board_width+2, (terminal.height-board_height-2)/2, (terminal.width-board_width-2)/2);;
+
+    return win;
+}
+
+void draw_scoreboard(const Game & game, int scores[SCOREBOARD_SIZE]) {
+    Coordinate terminalSize;
+    getmaxyx(stdscr, terminalSize.y, terminalSize.x);
+    WINDOW *win_scoreboard = initWindowCoords(SCOREBOARD_SIZE + 2, 15, (terminalSize.y - game.board_height-2)/2,  (terminalSize.x - game.board_width-2)/2 - (SCOREBOARD_SIZE + 15));
+    box(win_scoreboard, 0, 0);
+    mvwprintw(win_scoreboard, 0, 1, "Place");
+    mvwprintw(win_scoreboard, 0, 9, "Score");
+
+    for (int i = 1; i < SCOREBOARD_SIZE+1; i++) {
+        mvwprintw(win_scoreboard, i, 1, " %d.   | %d", i, scores[i-1]);
+    }
+
+    wrefresh(win_scoreboard);
+};
+
 void draw(WINDOW *win, const Game game) {
+    draw_scoreboard(game, game.scores);
     werase(win);
     wbkgd(win, COLOR_PAIR(COLOR_P_BACKGROUND));
 
@@ -286,6 +324,19 @@ void levelInit(Game *game, int level) {
     free(trap_rows);
 }
 
+WINDOW *get_next_level(WINDOW **win, Game *game) {
+    clear();
+    for (int i = 0; i < game->obstacleCount; i++) {
+        Obstacle obstacle;
+        game->obstacle[i] = obstacle;
+    }
+    game->obstacleCount = 0;
+
+    levelInit(game, game->level);
+
+    return (initWindowCentered(game->board_height, game->board_width));
+}
+
 /** @brief Function checks if frog collides with obstacle
  *
  *  @return true if frog collides with obstacle
@@ -384,13 +435,12 @@ void bubbleSort(int* array, int n) {
 }
 
 void saveSortedArrayToFile(const char* filename, int* array, int n) {
-    // Sortowanie tablicy - sortowanie bąbelkowe
+    // Sortowanie tablicy — sortowanie bąbelkowe
     bubbleSort(array, n);
 
     // Zapis posortowanej tablicy do pliku
     FILE* file = fopen(filename, "w");
     if (!file) {
-        printf("Blad otwierania pliku do zapisu.\n");
         return;
     }
 
@@ -399,7 +449,6 @@ void saveSortedArrayToFile(const char* filename, int* array, int n) {
     }
 
     fclose(file);
-    printf("Tablica zapisana do pliku w porządku posortowanym.\n");
 }
 
 int* readArray(const char* filename, int n) {
@@ -407,7 +456,6 @@ int* readArray(const char* filename, int n) {
     int* array = (int*)malloc(n * sizeof(int));
 
     if (!array) {
-        printf("Blad alokacji pamieci.\n");
         return nullptr;
     }
 
@@ -415,23 +463,20 @@ int* readArray(const char* filename, int n) {
         // Plik istnieje, odczytaj dane
         for (int i = 0; i < n; i++) {
             if (fscanf(file, "%d", &array[i]) != 1) {
-                printf("Blad odczytu danych z pliku.\n");
                 free(array);
-                return NULL;
+                return nullptr;
             }
         }
     } else {
-        // Plik nie istnieje, utworz nowy
+        // Plik nie istnieje, utwórz nowy
         file = fopen(filename, "w");
         if (!file) {
-            printf("Blad otwierania pliku do zapisu.\n");
             free(array);
-            return NULL;
+            return nullptr;
         }
 
         for (int i = 0; i < n; i++) {
             array[i] = -1;  // Wypełnij tablicę
-            fprintf(file, "%d\n", array[i]);
         }
     }
     fclose(file);
@@ -478,34 +523,7 @@ void moveObstacles(Game *game) {
     }
 }
 
-WINDOW * initWindow(int board_height, int board_width) {
-    clear();
-    struct Terminal{
-        int width = 0;
-        int height = 0;
-    };
-
-    Terminal terminal;
-    getmaxyx(stdscr, terminal.height, terminal.width);
-    WINDOW *win = newwin(board_height+2, board_width+2, (terminal.height-board_height-2)/2, (terminal.width-board_width-2)/2);
-    keypad(win, TRUE);
-    keypad(stdscr, TRUE);
-    return win;
-};
-
-WINDOW *get_next_level(WINDOW **win, Game *game) {
-    for (int i = 0; i < game->obstacleCount; i++) {
-        Obstacle obstacle;
-        game->obstacle[i] = obstacle;
-    }
-    game->obstacleCount = 0;
-
-    levelInit(game, game->level);
-
-    return (initWindow(game->board_height, game->board_width));
-}
-
-Level ** loadLevelsFile (char *fileName, int * level_count_p) {
+Level ** loadLevelsFile (const char *fileName, int * level_count_p) {
     FILE *file = fopen(fileName, "r");
     if (file == nullptr) {
         // drawError("Error opening file");
@@ -568,7 +586,6 @@ void handleControls(int input_b, Game * game) {
 
 int main(int argc, char *argv[]) {
     char fileName[] = "scoreboard.txt";
-    int *arrrr = readArray(fileName, SCOREBOARD_SIZE);
 
     int arr[SCOREBOARD_SIZE] = {5,6,4,2,1};
     saveSortedArrayToFile(fileName, arr,SCOREBOARD_SIZE);
@@ -579,11 +596,13 @@ int main(int argc, char *argv[]) {
 
     Game game;
     game.levels = loadLevelsFile(CONFIG_PATH, &game.level_count);
+    game.scores = readArray(fileName, SCOREBOARD_SIZE);
 
     initGame(&game);
 
     levelInit(&game, game.level);
-    win = initWindow(game.board_height, game.board_width);
+    win = initWindowCentered(game.board_height, game.board_width);
+
     draw(win, game);
 
     time_t forg_move_dt = 0;
