@@ -23,6 +23,7 @@
 #define COL_P_TITLE_LOOSE 8
 #define COL_P_BACKGROUND 9
 #define COL_P_BIRD 10
+#define COL_P_STORK 11
 
 #define SCOREBOARD_SIZE 5
 #define SCOREBOARD_PATH "scoreboard.txt"
@@ -39,6 +40,7 @@ enum ObstacleType {
     CAR_STOPPABLE,
     CAR_FRIENDLY,
     CACTUS,
+    STORK,
     BIRD
 };
 
@@ -85,6 +87,7 @@ struct Frog {
 };
 
 struct Game {
+    long long frame;
     int end = 0;
     bool win = false;
     int lvl{};
@@ -213,10 +216,14 @@ void draw(WINDOW *win, const Game game) {
     }else {
         // Obstacle
         Obstacle bird;
+        Obstacle stork;
         for (int i = 0; i < game.obs_count; i++) {
             Obstacle obstacle = game.obstacles[i];
             if (obstacle.type == BIRD) {
                 bird = obstacle;
+                continue;
+            }else if (obstacle.type == STORK) {
+                stork = obstacle;
                 continue;
             }
             wattron(win, COLOR_PAIR(obstacle.color_pair));
@@ -227,8 +234,9 @@ void draw(WINDOW *win, const Game game) {
             wattron(win, COLOR_PAIR(obstacle.color_pair));
 
         }
-        // Draw bird always on top
+        // Draw birds always on top
         mvwaddch(win, bird.y, bird.x, bird.skin | COLOR_PAIR(bird.color_pair));
+        mvwaddch(win, stork.y, stork.x, stork.skin | COLOR_PAIR(stork.color_pair));
 
         // Exit
         wattron(win, COLOR_PAIR(COL_P_EXIT));
@@ -265,6 +273,7 @@ void ncurses_init() {
     init_pair(COL_P_CAR_STOPPABLE, COLOR_WHITE, COLOR_RED);
     init_pair(COL_P_CAR_FRIENDLY, COLOR_GREEN, COLOR_RED);
     init_pair(COL_P_BIRD, COLOR_BLACK, COLOR_WHITE);
+    init_pair(COL_P_STORK, COLOR_RED, COLOR_WHITE);
 
 }
 
@@ -344,6 +353,17 @@ void init_obstacle(Game & game, int obs_board_row) {
     add_obstacle(game, obs);
 };
 
+void add_stork(Game &game) {
+    Obstacle obs;
+    obs.speed = 'B';
+    obs.type = STORK;
+    obs.x = game.frog.x - 1;
+    obs.y = game.board_height +3;
+    obs.speed = 1;
+    obs.color_pair = COL_P_STORK;
+    add_obstacle(game, obs);
+};
+
 void level_init(Game *game, int level) {
     int * trap_rows = get_level_data(game, level);
     int trap_row_i = game->board_height - 2;
@@ -372,7 +392,7 @@ void level_init(Game *game, int level) {
             add_obstacle(*game, obs);
         }else if (trap_rows[i] == BIRD) {
             Obstacle obs;
-            obs.speed = 'B';
+            obs.speed = '-';
             obs.type = BIRD;
             obs.bird.center_x = game->board_width/2;
             obs.bird.center_y = game->board_height/2;
@@ -384,6 +404,7 @@ void level_init(Game *game, int level) {
             add_obstacle(*game, obs);
         }
     }
+    add_stork(*game);
 
     free(trap_rows);
 }
@@ -437,6 +458,8 @@ bool check_win(Game *game) {
 }
 
 void move_to_different_lane(Obstacle * obstacles, Coordinate player_coordinate, int obs_count, int curr_obs_id, int lane_number) {
+    if (obstacles[curr_obs_id].type != CAR) return;
+
     int free_lanes[lane_number];
     for (int i = 0; i < lane_number; i++) {
         free_lanes[i] = -1;
@@ -638,6 +661,18 @@ void handle_car(Game *game, Obstacle *obstacle, int obstacle_index) {
     obstacle->speed = speed_buff; // Przywróć oryginalną prędkość
 }
 
+void move_stork(Game & game, Obstacle *stork) {
+    if (game.frame % 7 != 0) return;
+    int target_x = game.frog.x-1;
+    int target_y = game.frog.y;
+
+    if (stork->x < target_x) stork->x++;
+    else if (stork->x > target_x) stork->x--;
+
+    if (stork->y < target_y) stork->y++;
+    else if (stork->y > target_y) stork->y--;
+}
+
 void move_obstacles(Game *game) {
     for (int i = 0; i < game->obs_count; i++) {
         Obstacle *obstacle = &(game->obstacles[i]);
@@ -646,6 +681,8 @@ void move_obstacles(Game *game) {
             update_bird_position(obstacle);
         } else if (obstacle->type == CAR || obstacle->type == CAR_STOPPABLE || obstacle->type == CAR_FRIENDLY) {
             handle_car(game, obstacle, i);
+        }else if (obstacle->type == STORK) {
+            move_stork(*game, obstacle);
         }
     }
 }
@@ -747,6 +784,7 @@ int main(int argc, char *argv[]) {
     int last_input_b = -1;
 
     while (!game.end) {
+        game.frame++;
 
         wind = init_window_centered(game.board_height, game.board_width);
         time_t startTime = time(nullptr);
