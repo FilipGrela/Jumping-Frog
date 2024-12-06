@@ -1,4 +1,4 @@
-#define TEST true
+#define TEST false
 
 #include <clocale>
 #include <string.h>
@@ -6,7 +6,6 @@
 #include <time.h>
 #include <curses.h>			/* ncurses.h includes stdio.h */
 #include <unistd.h>
-#include <stdlib.h>
 #include <math.h>
 
 #define PROJECT_NAME "Jumping Frog"
@@ -25,6 +24,15 @@
 #define COL_P_BIRD 10
 #define COL_P_STORK 11
 
+#define FROG_DESC "FROG: Use arrows to navigate."
+#define EXIT_DESC "EXIT: Your destination point."
+#define CAR_DESC "CAR: Be careful, it's dangerous."
+#define CAR_STOPPABLE_DESC "CAR_STOPPABLE: Driver will stop to let you pass, but you shouldn't touch it!"
+#define CAR_FRIENDLY_DESC "CAR_FRIENDLY: This car can give you a ride!"
+#define CACTUS_DESC "CACTUS: It's spiky, don't touch it!"
+#define STORK_DESC "STORK: A hungry bird looking for a frog to eat."
+#define BIRD_DESC "BIRD: A lazy bird, it'll eat you when you get too close!"
+
 #define SCOREBOARD_SIZE 5
 #define SCOREBOARD_PATH "scoreboard.txt"
 
@@ -42,13 +50,15 @@
 */
 
 enum ObstacleType {
+    FIRST, //Has to be first in order, DON'T CHANGE
     NONE,
     CAR,
     CAR_STOPPABLE,
     CAR_FRIENDLY,
     CACTUS,
     STORK,
-    BIRD
+    BIRD,
+    LAST //Has to be last in order, DON'T CHANGE
 };
 
 struct Level {
@@ -94,8 +104,8 @@ struct Frog {
 
 struct Game {
     // board dimensions without border (only playable area)
-    int board_height{};
-    int board_width{};
+    int board_height = 1;
+    int board_width = 51;
     long long frame = 0;
 
     Exit exit;
@@ -447,7 +457,6 @@ void level_init(Game *game, int level) {
             obs.bird.center_y = game->board_height/2;
             obs.bird.radius = 5;
             obs.bird.angle = 0;
-            obs.skin = '0';
             obs.speed = 10;
             obs.color_pair = COL_P_BIRD;
 
@@ -616,7 +625,6 @@ void check_collision(Game *game) {
     }
 }
 
-
 void handle_car(Game *game, Obstacle *obstacle, int obstacle_index) {
     unsigned int speed_buff = obstacle->speed;
     double distance_to_frog = calculate_distance(game->frog.x, game->frog.y, obstacle->x, obstacle->y);
@@ -676,7 +684,6 @@ bool check_win(Game *game) {
     return false;
 }
 
-
 /*
    ::::::::::::::::::::::::::::::::::::::::::::::::::::::
    ::                                                  ::
@@ -684,6 +691,52 @@ bool check_win(Game *game) {
    ::                                                  ::
    ::::::::::::::::::::::::::::::::::::::::::::::::::::::
 */
+
+void draw_wait_for_start(WINDOW * wind) {
+    clear();
+    box(wind, 0, 0);
+    int width, height;
+    getmaxyx(wind, height, width);
+    mvwprintw(wind, height/2, (width-51)/2 + 1, "Press any button to start, H for help, Q to quit.");
+    refresh();
+};
+
+void draw_info() {
+    Coordinate terminalSize{};
+    getmaxyx(stdscr, terminalSize.y, terminalSize.x);
+    WINDOW *win = init_window_coords(11, 90, (terminalSize.y - 11)/2,  (terminalSize.x - 90)/2);
+    box(win, 0, 0);
+    mvwprintw(win, terminalSize.y/2, terminalSize.x, "Help");
+
+    struct TableEntry{
+        char character;
+        int color;
+        const char* description;
+    };
+    TableEntry table[] = {
+        {'0', COL_P_FROG, FROG_DESC},
+        {'^', COL_P_EXIT, EXIT_DESC},
+        {'*', COL_P_DANGER, CAR_DESC},
+        {'*', COL_P_CAR_STOPPABLE, CAR_STOPPABLE_DESC},
+        {'*', COL_P_CAR_FRIENDLY, CAR_FRIENDLY_DESC},
+        {'X', COL_P_CACTUS, CACTUS_DESC},
+        {'S', COL_P_BIRD, STORK_DESC},
+        {'B', COL_P_STORK, BIRD_DESC}
+    };
+
+
+
+    for (int i = 0; i < sizeof(table)/sizeof(TableEntry); i++) {
+
+        wattron(win, COLOR_PAIR(table[i].color));
+        mvwprintw(win, i+1, 2, "%c",table[i].character);
+        wattroff(win, COLOR_PAIR(table[i].color));
+        mvwprintw(win, i+1, 3, ": %s", table[i].description);
+    }
+
+    wrefresh(win);
+}
+
 void draw_board(const Game &game , WINDOW * win) {
     box(win, 0, 0);
     mvwprintw(win, 0, (game.board_height- sizeof(PROJECT_NAME)/sizeof(char))/6 , PROJECT_NAME);
@@ -705,7 +758,6 @@ void draw_scoreboard(const Game & game, int scores[SCOREBOARD_SIZE]) {
             mvwprintw(win_scoreboard, i, 1, " %d.   |", i);
         }
     }
-
     wrefresh(win_scoreboard);
 };
 
@@ -776,11 +828,28 @@ void draw(WINDOW *win, const Game game) {
 };
 
 
-void mem_free_lvl(Level *** level, int level_count) {
+void free_mem(Level *** level, int level_count) {
     for (int i = 0; i < level_count; i++) {
         free(level[0][i]);
     }
     free(*level);
+};
+
+void hdl_info_screen(WINDOW * wind, int * ch) {
+
+#if !TEST
+    while ((*ch == -1 && *ch != 'q') || *ch == 'h' ) {
+        switch (*ch) {
+            case 'h':
+                clear();
+                draw_info();
+                *ch = wgetch(wind);
+                break;
+            default:
+                *ch = wgetch(wind);
+        }
+    }
+#endif
 };
 
 int main(int argc, char *argv[]) {
@@ -788,57 +857,60 @@ int main(int argc, char *argv[]) {
 
     srand(time(nullptr));
     ncurses_init();
-    WINDOW *wind;
+    WINDOW *win;
 
     Game game;
     game.levels = load_levels_file(CONF_PATH, &game.lvl_count);
     game.scores_tabele = read_array(file_name, SCOREBOARD_SIZE);
 
+    win = init_window_centered(game.board_height, game.board_width);
     init_game(&game);
 
     level_init(&game, game.curr_lvl);
-    wind = init_window_centered(game.board_height, game.board_width);
 
-    // draw(wind, game);
+    draw_wait_for_start(win);
+    int
+    ch = wgetch(win);
+    hdl_info_screen(win, &ch);
 
     time_t forg_move_dt = 0;
     int last_input_b = -1;
 
-    while (!game.end) {
+
+    clear();
+    while (!game.end && ch != 'q') {
+        time_t startTime = time(nullptr);
         game.frame++;
 
-        wind = init_window_centered(game.board_height, game.board_width);
-        time_t startTime = time(nullptr);
+        win = init_window_centered(game.board_height, game.board_width);
         int input_b = getch();
 
         if (input_b != -1)
             forg_move_dt = 0;
 
-        #if !TEST
+#if !TEST
         if (forg_move_dt >= 5)
             game.end = true;
-        #endif
+#endif
 
         if (input_b != last_input_b && input_b != -1) {
             handle_controls(input_b, &game);
         }
 
-
         move_obstacles(&game);
         check_win(&game);
         game.play_time = get_elapsed_time(&game.start_time);
 
-        wind = handle_game_win(wind, &game);
-        draw(wind, game);
+        win = handle_game_win(win, &game);
+        draw(win, game);
 
         forg_move_dt += time(nullptr) - startTime;
         last_input_b = input_b;
     }
 
-    mem_free_lvl(&game.levels, game.lvl_count);
-    int ch = wgetch(wind);
+    free_mem(&game.levels, game.lvl_count);
     while (ch != 'q') {
-        ch = wgetch(wind);
+        ch = wgetch(win);
     }
 
     endwin();
