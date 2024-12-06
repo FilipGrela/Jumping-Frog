@@ -1,11 +1,13 @@
 #define TEST true
 
+#include <clocale>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
-#include <ncurses.h>			/* ncurses.h includes stdio.h */
+#include <curses.h>			/* ncurses.h includes stdio.h */
 #include <unistd.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define PROJECT_NAME "Jumping Frog"
 #define DELAY 60000
@@ -20,6 +22,7 @@
 #define COL_P_TITLE_WIN 7
 #define COL_P_TITLE_LOOSE 8
 #define COL_P_BACKGROUND 9
+#define COL_P_STORK 10
 
 #define SCOREBOARD_SIZE 5
 #define SCOREBOARD_PATH "scoreboard.txt"
@@ -34,7 +37,8 @@ enum ObstacleType {
     CAR,
     CAR_STOPPABLE,
     CAR_FRIENDLY,
-    CACTUS
+    CACTUS,
+    STORK
 };
 
 struct Level {
@@ -57,6 +61,14 @@ struct Obstacle {
     int direction = 1;
     char skin = 'X';
     ObstacleType type = NONE;
+
+    // Parametry ruchu po okręgu (dla BIRDO)
+    struct Stork {
+        double angle = 0.0;  // Aktualny kąt (w radianach)
+        int radius = 0;      // Promień okręgu
+        int center_x = 0;    // Środek okręgu (x)
+        int center_y = 0;    // Środek okręgu (y)
+    }stork;
 };
 
 struct Exit {
@@ -85,12 +97,23 @@ struct Game {
     int lvl_count{};
     int board_height{};
     int board_width{};
-    int *scores;
+    int *scores = nullptr;
 };
 
 int get_random_number(int min, int max) {
     return rand() % (max + 1 - min) + min;
 
+}
+
+void add_stork_obstacle(Obstacle *obs, int center_x, int center_y, int radius, double start_angle, int speed, int color) {
+    obs->skin = 'B';
+    obs->type = STORK;
+    obs->stork.center_x = center_x;
+    obs->stork.center_y = center_y;
+    obs->stork.radius = radius;
+    obs->stork.angle = start_angle;
+    obs->speed = speed;
+    obs->color_pair = color;
 }
 
 void add_obstacle(Game *game, const Obstacle obstacle) {
@@ -152,7 +175,7 @@ WINDOW * init_window_centered(int board_height, int board_width) {
 }
 
 void draw_scoreboard(const Game & game, int scores[SCOREBOARD_SIZE]) {
-    Coordinate terminalSize;
+    Coordinate terminalSize{};
     getmaxyx(stdscr, terminalSize.y, terminalSize.x);
     WINDOW *win_scoreboard = init_window_coords(SCOREBOARD_SIZE + 2, 17, (terminalSize.y - game.board_height-2)/2,  (terminalSize.x - game.board_width-2)/2 - (SCOREBOARD_SIZE + 15));
     box(win_scoreboard, '|', '-');
@@ -184,8 +207,13 @@ void draw(WINDOW *win, const Game game) {
         draw_communicates(win,game.win, game.board_height, game.board_width, game.play_time);
     }else {
         // Obstacle
+        Obstacle stork;
         for (int i = 0; i < game.obs_count; i++) {
             Obstacle obstacle = game.obstacles[i];
+            if (obstacle.type == STORK) {
+                stork = obstacle;
+                continue;
+            }
             wattron(win, COLOR_PAIR(obstacle.color_pair));
             for (int x = 1; x <= game.board_width; x++) {
                 mvwprintw(win, obstacle.y, x, " ");
@@ -194,6 +222,8 @@ void draw(WINDOW *win, const Game game) {
             wattron(win, COLOR_PAIR(obstacle.color_pair));
 
         }
+        // Draw stork always on top
+        mvwaddch(win, stork.y, stork.x, stork.skin | COLOR_PAIR(stork.color_pair));
 
         // Exit
         wattron(win, COLOR_PAIR(COL_P_EXIT));
@@ -208,7 +238,7 @@ void draw(WINDOW *win, const Game game) {
     usleep(DELAY);
 };
 
-void curses_init() {
+void ncurses_init() {
     initscr();
     noecho();
     cbreak();
@@ -229,6 +259,7 @@ void curses_init() {
     init_pair(COL_P_BACKGROUND, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(COL_P_CAR_STOPPABLE, COLOR_WHITE, COLOR_RED);
     init_pair(COL_P_CAR_FRIENDLY, COLOR_GREEN, COLOR_RED);
+    init_pair(COL_P_STORK, COLOR_BLACK, COLOR_WHITE);
 
 }
 
@@ -252,6 +283,11 @@ void fill_trap_rows(int * trap_rows, const int row_number, int cactus_row_num, i
             } while (trap_rows[row_num] != -1);
             trap_rows[row_num] = CAR;
         }
+        unsigned int row_num;
+        // do {
+            row_num = 5;
+        // } while (trap_rows[row_num] != -1);
+        trap_rows[row_num] = STORK;
     }
 }
 
@@ -325,6 +361,18 @@ void level_init(Game *game, int level) {
             obs.color_pair = COL_P_CACTUS;
 
             add_obstacle(game, obs);
+        }else if (trap_rows[i] == STORK) {
+            Obstacle obs;
+            obs.speed = 'B';
+            obs.type = STORK;
+            obs.stork.center_x = game->board_width/2;
+            obs.stork.center_y = game->board_height/2;
+            obs.stork.radius = 5;
+            obs.stork.angle = 0;
+            obs.speed = 10;
+            obs.color_pair = COL_P_STORK;
+
+            add_obstacle(game, obs);
         }
     }
 
@@ -387,29 +435,17 @@ void move_to_different_lane(Obstacle * obstacles, Coordinate player_coordinate, 
     free_lanes[0] = 1;
     free_lanes[lane_number-1] = 1;
 
-    Obstacle ss[obs_count];
-    for (int i = 0; i < obs_count; i++) {
-        ss[i] = obstacles[i];
-    }
-
     for (int i = 0; i < obs_count; i++) {
         free_lanes[obstacles[i].y-1] = obstacles[i].type;
     }
     free_lanes[player_coordinate.y-1] = 1;
 
     int new_y;
-    long start_t = clock();
     do{
-        // if ((clock() - start_t )/ CLOCKS_PER_SEC >= 0.2 ) break;
         new_y = get_random_number(1, lane_number-1);
 
     } while (free_lanes[new_y] != -1);
     obstacles[curr_obs_id].y = new_y+1;
-    Obstacle sss[obs_count];
-    for (int i = 0; i < obs_count; i++) {
-        sss[i] = obstacles[i];
-    }
-    sleep(0);
 }
 
 double sqrt(double x) {
@@ -539,10 +575,24 @@ int* read_array(const char* file_name, int n) {
     return array;
 }
 
+void update_stork_position(Obstacle *obs) {
+    if (obs->type != STORK) return;
+
+    // Aktualizacja kąta na podstawie prędkości
+    obs->stork.angle += obs->speed * 0.01;
+    if (obs->stork.angle >= 2 * M_PI) obs->stork.angle -= 2 * M_PI;
+
+    // Oblicz nową pozycję na okręgu
+    obs->x = obs->stork.center_x + (int)(obs->stork.radius * cos(obs->stork.angle));
+    obs->y = obs->stork.center_y + (int)(obs->stork.radius * sin(obs->stork.angle) * 0.5); // Skalowanie dla proporcji konsoli
+}
+
 void move_obstacles(Game *game) {
     for (int i = 0; i < game->obs_count; i++) {
         Obstacle *obstacle = &(game->obstacles[i]);
-        if (obstacle->type == CAR|| obstacle->type == CAR_STOPPABLE || obstacle->type == CAR_FRIENDLY) {
+        if (obstacle->type == STORK) {
+            update_stork_position(obstacle);
+        }else if (obstacle->type == CAR|| obstacle->type == CAR_STOPPABLE || obstacle->type == CAR_FRIENDLY) {
             unsigned int speed_buff = obstacle->speed;
             double distance_to_frog = calculate_distance(game->frog.x, game->frog.y, obstacle->x, obstacle->y);
             if (obstacle->type == CAR_STOPPABLE && distance_to_frog <= 3) {
@@ -656,7 +706,7 @@ int main(int argc, char *argv[]) {
     char file_name[] = SCOREBOARD_PATH;
 
     srand(time(nullptr));
-    curses_init();
+    ncurses_init();
     WINDOW *wind;
 
     Game game;
@@ -668,12 +718,14 @@ int main(int argc, char *argv[]) {
     level_init(&game, game.lvl);
     wind = init_window_centered(game.board_height, game.board_width);
 
-    draw(wind, game);
+    // draw(wind, game);
 
     time_t forg_move_dt = 0;
     int last_input_b = -1;
 
     while (!game.end) {
+
+        wind = init_window_centered(game.board_height, game.board_width);
         time_t startTime = time(nullptr);
         int input_b = getch();
 
