@@ -208,6 +208,7 @@ double calculate_distance(int x1, int y1, int x2, int y2) {
     return   sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
 }
 
+
 long get_elapsed_time(const long *ts) {
     const long end = time(nullptr);
     return (end - *ts);
@@ -760,8 +761,14 @@ bool check_win(Game *game) {
    ::::::::::::::::::::::::::::::::::::::::::::::::::::::
 */
 
+void draw_autor() {
+    mvwprintw(stdscr, 1, 4, "Author: Filip Grela");
+    mvwprintw(stdscr, 2, 4, "Index: 203850");
+}
+
 void draw_wait_for_start(WINDOW * wind) {
     clear();
+    draw_autor();
     box(wind, 0, 0);
     int width, height;
     getmaxyx(wind, height, width);
@@ -874,6 +881,7 @@ void draw_obstacles(WINDOW *win, const Game *game) {
 
 void draw(WINDOW *win, const Game game) {
     draw_scoreboard(game, game.scores_tabele);
+    draw_autor();
     werase(win);
     wbkgd(win, COLOR_PAIR(COL_P_BACKGROUND));
 
@@ -955,18 +963,18 @@ int main(int argc, char *argv[]) {
 
         win = init_window_centered(game.board_height, game.board_width);
         int input_b = getch();
+        flushinp();
 
-        if (input_b != -1)
+
+        if (input_b != last_input_b && input_b != -1) {
             forg_move_dt = 0;
+            handle_controls(input_b, &game);
+        }
 
 #if !TEST
         if (forg_move_dt >= 5)
             game.end = true;
 #endif
-
-        if (input_b != last_input_b && input_b != -1) {
-            handle_controls(input_b, &game);
-        }
 
         move_obstacles(&game);
         check_win(&game);
