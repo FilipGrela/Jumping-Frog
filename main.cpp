@@ -1,6 +1,6 @@
 #define TEST false
 
-#include <clocale>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -13,22 +13,22 @@
 
 #define COL_P_FROG 1
 #define COL_P_EXIT 2
-// #define COL_P_SAFE
 #define COL_P_DANGER 3
 #define COL_P_CAR_STOPPABLE 4
-#define COL_P_CAR_FRIENDLY 5
-#define COL_P_CACTUS 6
-#define COL_P_TITLE_WIN 7
-#define COL_P_TITLE_LOOSE 8
-#define COL_P_BACKGROUND 9
-#define COL_P_BIRD 10
-#define COL_P_STORK 11
+#define COL_P_CAR_FRIENDLY_on 5
+#define COL_P_CAR_FRIENDLY_off 6
+#define COL_P_CACTUS 7
+#define COL_P_TITLE_WIN 8
+#define COL_P_TITLE_LOOSE 9
+#define COL_P_BACKGROUND 10
+#define COL_P_BIRD 11
+#define COL_P_STORK 12
 
 #define FROG_DESC "FROG: Use arrows to navigate."
 #define EXIT_DESC "EXIT: Your destination point."
 #define CAR_DESC "CAR: Be careful, it's dangerous."
-#define CAR_STOPPABLE_DESC "CAR_STOPPABLE: Driver will stop to let you pass, but you shouldn't touch it!"
-#define CAR_FRIENDLY_DESC "CAR_FRIENDLY: This car can give you a ride!"
+#define CAR_STOPPABLE_DESC "GOOD CAR: Driver will stop to let you pass, but you shouldn't touch it!"
+#define CAR_FRIENDLY_DESC "BUS: This car can give you a ride! Press E to make it CAR."
 #define CACTUS_DESC "CACTUS: It's spiky, don't touch it!"
 #define STORK_DESC "STORK: A hungry bird looking for a frog to eat."
 #define BIRD_DESC "BIRD: A lazy bird, it'll eat you when you get too close!"
@@ -119,6 +119,7 @@ struct Game {
 
     bool win = false;
     bool end = false;
+    bool friendly_car_ride = true;
 
     long start_time{};
     long play_time{};
@@ -138,6 +139,70 @@ int get_random_number(int min, int max) {
     return rand() % (max + 1 - min) + min;
 
 }
+
+double sqrt(double x) {
+    if (x < 0) return -1;
+    if (x == 0 || x == 1) return x;
+
+    double approx = x;
+    double better_approx = 0.5 * (approx + x / approx);
+
+    while (approx - better_approx > 1e-6 || better_approx - approx > 1e-6) {
+        approx = better_approx;
+        better_approx = 0.5 * (approx + x / approx);
+    }
+
+    return better_approx;
+}
+
+double pow(double base, int exp) {
+    if (exp == 0) return 1;
+    if (exp < 0) return 1 / pow(base, -exp);
+
+    double half = pow(base, exp / 2);
+    if (exp % 2 == 0) {
+        return half * half;
+    } else {
+        return half * half * base;
+    }
+}
+
+double factorial(int n) {
+    double result = 1.0;
+    for (int i = 2; i <= n; i++) {
+        result *= i;
+    }
+    return result;
+}
+
+double sin(double x) {
+    double term = x;
+    double sum = term;
+    int n = 3;
+
+    for (int i = 1; i <= 10; i++) {
+        term = -term * x * x / ((n - 1) * n);
+        sum += term;
+        n += 2;
+    }
+
+    return sum;
+}
+
+double cos(double x) {
+    double term = 1.0;
+    double sum = term;
+    int n = 2;
+
+    for (int i = 1; i <= 10; i++) {
+        term = -term * x * x / ((n - 1) * n);
+        sum += term;
+        n += 2;
+    }
+
+    return sum;
+}
+
 
 double calculate_distance(int x1, int y1, int x2, int y2) {
     return   sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
@@ -225,7 +290,8 @@ void ncurses_init() {
     init_pair(COL_P_TITLE_LOOSE, COLOR_RED, COLOR_BLACK);
     init_pair(COL_P_BACKGROUND, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(COL_P_CAR_STOPPABLE, COLOR_WHITE, COLOR_RED);
-    init_pair(COL_P_CAR_FRIENDLY, COLOR_GREEN, COLOR_RED);
+    init_pair(COL_P_CAR_FRIENDLY_on, COLOR_GREEN, COLOR_RED);
+    init_pair(COL_P_CAR_FRIENDLY_off, COLOR_YELLOW, COLOR_RED);
     init_pair(COL_P_BIRD, COLOR_BLACK, COLOR_WHITE);
     init_pair(COL_P_STORK, COLOR_RED, COLOR_WHITE);
 
@@ -404,7 +470,7 @@ void init_obstacle(Game & game, int obs_board_row) {
         obs.color_pair = COL_P_CAR_STOPPABLE;
     } else if (random_num > 66) {
         obs.type = CAR_FRIENDLY;
-        obs.color_pair = COL_P_CAR_FRIENDLY;
+        obs.color_pair = COL_P_CAR_FRIENDLY_on;
     }
 
     obs.skin = '*';
@@ -533,7 +599,9 @@ void handle_controls(int input_b, Game * game) {
     }else if (input_b == 'd' || input_b == KEY_RIGHT) {
         if (game->frog.x < game->board_width)
             game->frog.x++;
-    } else if (input_b == 'q' || input_b == KEY_EXIT || input_b == 27) {
+    }else if (input_b == 'e') {
+        game->friendly_car_ride = !game->friendly_car_ride;
+    }else if (input_b == 'q' || input_b == KEY_EXIT || input_b == 27) {
         game->end = 1;
     }
 }
@@ -607,7 +675,7 @@ void check_collision(Game *game) {
         }
 
         // Handle collision based on obstacle type
-        if (obstacle.type != CAR_FRIENDLY) {
+        if (obstacle.type != CAR_FRIENDLY || (obstacle.type == CAR_FRIENDLY && !game->friendly_car_ride)) {
             game->end = true;
             return;
         }
@@ -718,7 +786,7 @@ void draw_info() {
         {'^', COL_P_EXIT, EXIT_DESC},
         {'*', COL_P_DANGER, CAR_DESC},
         {'*', COL_P_CAR_STOPPABLE, CAR_STOPPABLE_DESC},
-        {'*', COL_P_CAR_FRIENDLY, CAR_FRIENDLY_DESC},
+        {'*', COL_P_CAR_FRIENDLY_on, CAR_FRIENDLY_DESC},
         {'X', COL_P_CACTUS, CACTUS_DESC},
         {'S', COL_P_BIRD, STORK_DESC},
         {'B', COL_P_STORK, BIRD_DESC}
@@ -787,6 +855,10 @@ void draw_obstacles(WINDOW *win, const Game *game) {
             stork = obstacle;
             continue;
         }
+        else if (obstacle.type == CAR_FRIENDLY) {
+            obstacle.color_pair = game->friendly_car_ride ? COL_P_CAR_FRIENDLY_on : COL_P_CAR_FRIENDLY_off;
+        }
+
         wattron(win, COLOR_PAIR(obstacle.color_pair));
         for (int x = 1; x <= game->board_width; x++) {
             mvwprintw(win, obstacle.y, x, " ");
@@ -857,13 +929,12 @@ int main(int argc, char *argv[]) {
 
     srand(time(nullptr));
     ncurses_init();
-    WINDOW *win;
 
     Game game;
     game.levels = load_levels_file(CONF_PATH, &game.lvl_count);
     game.scores_tabele = read_array(file_name, SCOREBOARD_SIZE);
 
-    win = init_window_centered(game.board_height, game.board_width);
+    WINDOW *win = init_window_centered(game.board_height, game.board_width);
     init_game(&game);
 
     level_init(&game, game.curr_lvl);
