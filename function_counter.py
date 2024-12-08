@@ -32,7 +32,10 @@ def analyze_cpp_file(file_path):
     brace_count = 0
 
     # Wyrażenie regularne do rozpoznania nagłówka funkcji
-    function_header_pattern = re.compile(r'(\w[\w\s\*&]+)\s+(\w+)\s*\([^)]*\)\s*{')
+    function_header_pattern = re.compile(
+        r'(\w[\w\s*&]+)\s+(\w+)\s*\([^)]*\)\s*\n?\s*\{',
+        re.MULTILINE
+    )
 
     for line in lines:
         stripped_line = line.strip()
@@ -43,7 +46,9 @@ def analyze_cpp_file(file_path):
             if match:
                 function_name = match.group(2)  # Nazwa funkcji
                 inside_function = True
-                brace_count = stripped_line.count('{') - stripped_line.count('}')
+                a = stripped_line.count('{')
+                b = stripped_line.count('}')
+                brace_count = a - b
                 function_body = []
         else:
             # Jesteśmy wewnątrz funkcji - liczymy klamry
@@ -80,6 +85,7 @@ def analyze_cpp_file(file_path):
         print(tabulate(formatted_results, headers=["Nazwa funkcji", "Długość (bez białych znaków)", "Status"], tablefmt="grid"))
     else:
         print("Nie znaleziono żadnych funkcji w pliku.")
+
 
 if __name__ == "__main__":
     # Parsowanie argumentów
